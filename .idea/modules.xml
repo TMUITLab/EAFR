@@ -2,6 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
+      <module fileurl="file://$PROJECT_DIR$/.idea/EAFR.iml" filepath="$PROJECT_DIR$/.idea/EAFR.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/EAkit-master.iml" filepath="$PROJECT_DIR$/.idea/EAkit-master.iml" />
     </modules>
   </component>
