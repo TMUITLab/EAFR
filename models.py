@@ -673,28 +673,25 @@ class MyGCN(torch.nn.Module):
             self.gcn[i] = GCNAlign_GCNConv_relation(out_channels, out_channels, improved, cached, bias, layer_index, **kwargs)
 
 
-    def activation(self,x):
-
-        return  self.activation(x)
 
     def drop(self,x):
 
         return  F.dropout(x,p=self.feat_drop,training=self.training)
 
-    def forward1(self, x,g,r):
+    def forward(self,  x,g,r,s,r_ij):
         num_nodes = x.shape[0]
         num_rels = r.shape[0]
 
-        r = self.drop(r)
-        x = self.drop(x)
-        xr = torch.cat([x, r], dim=0)
-        x1_in = self.gcn[0](xr, g['in_nodes'])
-        x1_in_a = self.activation(x1_in)
+        # r = self.drop(r)
+        # x = self.drop(x)
+        # xr = torch.cat([x, r], dim=0)
+        # x1_in = self.gcn[0](xr, g['in_nodes'])
+        # x1_in_a = self.activation(x1_in)
 
-        x1_in_a = self.drop(x1_in_a)
-        x2_in = self.gcn[1](x1_in_a, g['in_nodes'])[:num_nodes,:]
-        x2_in_a = self.activation(x2_in)
-
+        # x1_in_a = self.drop(x1_in_a)
+        # x2_in = self.gcn[1](x1_in_a, g['in_nodes'])[:num_nodes,:]
+        # x2_in_a = self.activation(x2_in)
+        #
         x1_out = self.gcn[2](x, g['default'])
         x1_out_a = self.activation(x1_out)
 
@@ -702,11 +699,11 @@ class MyGCN(torch.nn.Module):
         x2_out = self.gcn[3](x1_out_a, g['default'])
         x2_out_a = self.activation(x2_out)
 
-        x2_in  = torch.nn.functional.normalize(x2_in, p=2)
+        # x2_in  = torch.nn.functional.normalize(x2_in, p=2)
         x2_out  = torch.nn.functional.normalize(x2_out, p=2)
 
-        o = torch.cat([x2_in,x2_out],dim=-1)
-        return x2_in
+        # o = torch.cat([x2_out],dim=-1)
+        return x2_out
 
     def gather_information(self , x, g, i,num_epoch = 2 ):
         x1 = torch.nn.functional.normalize(x,p=2)
@@ -733,7 +730,7 @@ class MyGCN(torch.nn.Module):
         x2 = torch.nn.functional.normalize(x2, p=2)
         return  x2
 
-    def forward(self, x,g,r,s,r_ij):
+    def forward1(self, x,g,r,s,r_ij):
         num_nodes = x.shape[0]
         num_rels = r.shape[0]
 
