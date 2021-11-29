@@ -166,12 +166,12 @@ class Experiment:
         graph_encoder = None
         if self.args.encoder:
             if( ',' not in self.args.encoder):
-                graph_encoder = Encoder(self.args.encoder, self.hiddens, self.heads+[1], activation=F.elu, feat_drop=self.args.feat_drop, attn_drop=self.args.attn_drop, negative_slope=0.2, bias=False).to(device)
+                graph_encoder = Encoder(self.args.encoder, self.hiddens, self.heads+[1], activation=F.elu, feat_drop=self.args.feat_drop, attn_drop=self.args.attn_drop, negative_slope=0.2, bias=False,device=device).to(device)
                 logger.info(graph_encoder)
             else:
                 graph_encoder = MultipleEncoder(self.args.encoder, self.hiddens, self.heads + [1], activation=F.elu,
                                           feat_drop=self.args.feat_drop, attn_drop=self.args.attn_drop, negative_slope=0.2,
-                                          bias=False,edges_name = args.edges_name).to(device)
+                                          bias=False,edges_name = args.edges_name,device=device).to(device)
                 logger.info(graph_encoder)
         knowledge_decoder = []
         for idx, decoder_name in enumerate(self.args.decoder):
@@ -339,6 +339,8 @@ class Experiment:
                     use_edges = {}
                     for edge_n in edges:
                         use_edges[edge_n] = torch.LongTensor(edges[edge_n]).to(device)
+
+
 
                     in_emb = torch.cat([ins_emb,rel_emb],axis=0)
                     enh_emb = encoder.forward(use_edges, in_emb, rel_emb[abs(d.r_ij_idx)] if encoder and encoder.name == "naea" or encoder.name.__contains__('gcn-align-r') else  None

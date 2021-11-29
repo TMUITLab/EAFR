@@ -33,14 +33,14 @@ from torch_scatter import scatter_add
 
 # --- Main Models: Encoder ---
 class MultipleEncoder(torch.nn.Module):
-    def __init__(self, name, hiddens, heads, activation, feat_drop, attn_drop, negative_slope, bias,edges_name=None):
+    def __init__(self, name, hiddens, heads, activation, feat_drop, attn_drop, negative_slope, bias,edges_name=None,device='cpu'):
         super(MultipleEncoder, self).__init__()
         self.encoders = []
         self.edges_name = edges_name
         i = 0
         self.name = name;
         for encoder_name in self.name.split(','):
-            enc = Encoder(encoder_name, hiddens, heads, activation, feat_drop, attn_drop, negative_slope, bias);
+            enc = Encoder(encoder_name, hiddens, heads, activation, feat_drop, attn_drop, negative_slope, bias,device);
             self.encoders.append(enc);
 
         if self.edges_name and ',' in self.edges_name:
@@ -86,7 +86,7 @@ class MultipleEncoder(torch.nn.Module):
 
 # --- Main Models: Encoder ---
 class Encoder(torch.nn.Module):
-    def __init__(self, name, hiddens, heads, activation, feat_drop, attn_drop, negative_slope, bias):
+    def __init__(self, name, hiddens, heads, activation, feat_drop, attn_drop, negative_slope, bias,device='cpu'):
         super(Encoder, self).__init__()
         self.name = name
         self.hiddens = hiddens
@@ -104,7 +104,7 @@ class Encoder(torch.nn.Module):
                 self.gnn_layers.append(
                     #GCNAlign_GCNConv(in_channels=self.hiddens[l], out_channels=self.hiddens[l+1], improved=False, cached=True,layer_index = l, bias=bias)
                     MyGCN(in_channels=self.hiddens[l], out_channels=self.hiddens[l + 1], improved=False,
-                                     cached=True, bias=bias,feat_drop = self.feat_drop , activation = self.activation)
+                                     cached=True, bias=bias,feat_drop = self.feat_drop , activation = self.activation,device=device)
                 )
             elif self.name == "gcn-align-r" or self.name .startswith( "gcn-align-ru"):
                 self.gnn_layers.append(
@@ -654,8 +654,9 @@ class ConvE(torch.nn.Module):
 
 class MyGCN(torch.nn.Module):
     def __init__(self, in_channels, out_channels, improved=False, cached=False,
-                 bias=True,layer_index = 0,feat_drop = 0.2,activation = torch.relu , **kwargs):
+                 bias=True,layer_index = 0,feat_drop = 0.2,activation = torch.relu ,device = 'cpu', **kwargs):
         super(MyGCN, self).__init__()
+
         self.feat_drop = feat_drop
         self.in_channels = in_channels;
         self.out_channels = out_channels
@@ -670,9 +671,9 @@ class MyGCN(torch.nn.Module):
             if i < 4:
                 pow = -1
 
-            self.gcn[i]  = GCNAlign_GCNConv(in_channels, out_channels,improved,cached,bias,layer_index,pow = pow,**kwargs)
+            self.gcn[i]  = GCNAlign_GCNConv(in_channels, out_channels,improved,cached,bias,layer_index,pow = pow,**kwargs).to(device)
         for i in range(10,12):
-            self.gcn[i] = GCNAlign_GCNConv_relation(out_channels, out_channels, improved, cached, bias, layer_index, **kwargs)
+            self.gcn[i] = GCNAlign_GCNConv_relation(out_channels, out_channels, improved, cached, bias, layer_index, **kwargs).to(device)
 
 
 
