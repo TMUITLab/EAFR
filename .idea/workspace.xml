@@ -7,7 +7,9 @@
     <bookmark url="file://$PROJECT_DIR$/run.py" line="288" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="c764c9b9-b437-4200-80e1-443d47121786" name="Default Changelist" comment="i'm uploading to my repository for first time" />
+    <list default="true" id="c764c9b9-b437-4200-80e1-443d47121786" name="Default Changelist" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+    </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -114,12 +116,12 @@
         <counts>
           <entry key="Python Console" value="199" />
           <entry key="py" value="955" />
-          <entry key="txt" value="2" />
+          <entry key="txt" value="18" />
         </counts>
       </usages-collector>
       <usages-collector id="statistics.file.types.edit">
         <counts>
-          <entry key="PLAIN_TEXT" value="2" />
+          <entry key="PLAIN_TEXT" value="18" />
           <entry key="Python" value="1154" />
         </counts>
       </usages-collector>
@@ -486,7 +488,21 @@
       <option name="project" value="LOCAL" />
       <updated>1638163562207</updated>
     </task>
-    <option name="localTasksCounter" value="9" />
+    <task id="LOCAL-00009" summary="i'm uploading to my repository for first time">
+      <created>1638164835104</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1638164835104</updated>
+    </task>
+    <task id="LOCAL-00010" summary="this is for test">
+      <created>1638164854264</created>
+      <option name="number" value="00010" />
+      <option name="presentableId" value="LOCAL-00010" />
+      <option name="project" value="LOCAL" />
+      <updated>1638164854264</updated>
+    </task>
+    <option name="localTasksCounter" value="11" />
     <servers />
   </component>
   <component name="TodoView">
@@ -512,7 +528,7 @@
       <window_info anchor="bottom" id="Inspection" order="5" weight="0.4" />
       <window_info anchor="bottom" id="TODO" order="6" sideWeight="0.49848714" weight="0.3289689" />
       <window_info anchor="bottom" id="Docker" order="7" show_stripe_button="false" />
-      <window_info active="true" anchor="bottom" id="Version Control" order="8" sideWeight="0.4977307" visible="true" weight="0.3289689" />
+      <window_info active="true" anchor="bottom" id="Version Control" order="8" sideWeight="0.4977307" visible="true" weight="0.32405892" />
       <window_info anchor="bottom" id="Database Changes" order="9" show_stripe_button="false" />
       <window_info anchor="bottom" id="Event Log" order="10" sideWeight="0.50226927" side_tool="true" weight="0.3289689" />
       <window_info anchor="bottom" id="Terminal" order="11" sideWeight="0.4977307" weight="0.3289689" />
@@ -593,7 +609,8 @@
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="i'm uploading to my repository for first time" />
-    <option name="LAST_COMMIT_MESSAGE" value="i'm uploading to my repository for first time" />
+    <MESSAGE value="this is for test" />
+    <option name="LAST_COMMIT_MESSAGE" value="this is for test" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
