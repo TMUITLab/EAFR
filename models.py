@@ -17,6 +17,7 @@ from utils import *
 
 
 # --- torch_geometric Packages ---it is for test
+# i had same problems with versioning
 import math
 from torch.nn import Parameter
 import torch_geometric
