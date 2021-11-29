@@ -342,7 +342,7 @@ class Experiment:
 
                     in_emb = torch.cat([ins_emb,rel_emb],axis=0)
                     enh_emb = encoder.forward(use_edges, in_emb, rel_emb[abs(d.r_ij_idx)] if encoder and encoder.name == "naea" or encoder.name.__contains__('gcn-align-r') else  None
-                                              ,torch.sgn(torch.tensor(d.r_ij_idx)) if encoder and encoder.name == "naea" or encoder.name.__contains__('gcn-align-r') else  None)
+                                              ,torch.sgn(torch.tensor(d.r_ij_idx)).to(device) if encoder and encoder.name == "naea" or encoder.name.__contains__('gcn-align-r') else  None)
                     #enh_emb = torch.cat([enh_emb,in_emb],-1)
                     #in_emb = in_emb.reshape(in_emb.shape[0]*4,-1)
                     # enh_emb = enh_emb.reshape(in_emb.shape[0]//4,-1)
@@ -351,12 +351,12 @@ class Experiment:
                 else:
                     use_edges = torch.LongTensor(edges['default']).to(device)
                     if encoder.name.startswith('gcn-align-r'):
-                        enh_emb = encoder.forward(use_edges, in_emb, rel_emb[abs(d.r_ij_idx)],torch.sgn(torch.tensor(d.r_ij_idx)))
+                        enh_emb = encoder.forward(use_edges, in_emb, rel_emb[abs(d.r_ij_idx)],torch.sgn(torch.tensor(d.r_ij_idx)).to(device))
                     elif encoder.name == 'mygcn':
                         use_edges = {}
                         for edge_n in edges:
                             use_edges[edge_n] = torch.LongTensor(edges[edge_n]).to(device).t()
-                        enh_emb = encoder.forward(use_edges, in_emb, rel_emb,torch.sgn(torch.tensor(d.r_ij_idx)),rel_emb[abs(d.r_ij_idx)])
+                        enh_emb = encoder.forward(use_edges, in_emb, rel_emb,torch.sgn(torch.tensor(d.r_ij_idx)).to(device),rel_emb[abs(d.r_ij_idx)])
                     else:
                         enh_emb = encoder.forward(use_edges, in_emb, rel_emb[abs(d.r_ij_idx)] if encoder and encoder.name == "naea"  or encoder.name.__contains__('gcn-align-r') else  None)
             else:
