@@ -59,9 +59,9 @@ class Experiment:
     def evaluate(self, it, test, ins_emb, mapping_emb=None):
         t_test = time.time()
         top_k = [1, 3, 5, 10]
-        if(it % 10 == 9 and 1==2):
+        if(it % 10 == 9 ):
             #new_emb = d.ReGAL(ins_emb,test[:, 0],test[:, 1]);
-            ins_emb = d.recursive_triple_embedding(d.triple_idx,ins_emb,np.array(self.rel_embeddings.weight),ins_emb,num_epoch=2)
+            ins_emb = d.recursive_triple_embedding(d.triple_idx,ins_emb,self.rel_embeddings.weight.detach().cpu().numpy(),ins_emb,num_epoch=2)
             #ins_emb =  np.concatenate((ins_emb, new_emb), axis=-1)
 
         if mapping_emb is not None:
@@ -133,8 +133,11 @@ class Experiment:
             elif self.args.decoder == ["transr"]:
                 r_scale = self.hiddens[0] + 1
         else:
-            num_encoder = self.args.encoder.split(',').__len__()
-            e_scale, r_scale = 1, 1
+            if self.args.encoder == "mygcn":
+                r_scale = self.args.hiddens.split(',').__len__() - 1;
+            else:
+                num_encoder = self.args.encoder.split(',').__len__()
+                e_scale, r_scale = 1, 1
 
         self.ins_embeddings = nn.Embedding(d.ins_num, self.hiddens[0] * e_scale).to(device)
         self.rel_embeddings = nn.Embedding(d.rel_num, int(self.hiddens[0] * r_scale)).to(device)
@@ -344,7 +347,7 @@ class Experiment:
 
                     in_emb = torch.cat([ins_emb,rel_emb],axis=0)
                     enh_emb = encoder.forward(use_edges, in_emb, rel_emb[abs(d.r_ij_idx)] if encoder and encoder.name == "naea" or encoder.name.__contains__('gcn-align-r') else  None
-                                              ,torch.sgn(torch.tensor(d.r_ij_idx)).to(device) if encoder and encoder.name == "naea" or encoder.name.__contains__('gcn-align-r') else  None)
+                                              ,torch.sgn(torch.tensor(d.r_ij_idx).to(device)) if encoder and encoder.name == "naea" or encoder.name.__contains__('gcn-align-r') else  None)
                     #enh_emb = torch.cat([enh_emb,in_emb],-1)
                     #in_emb = in_emb.reshape(in_emb.shape[0]*4,-1)
                     # enh_emb = enh_emb.reshape(in_emb.shape[0]//4,-1)
@@ -353,7 +356,7 @@ class Experiment:
                 else:
                     use_edges = torch.LongTensor(edges['default']).to(device)
                     if encoder.name.startswith('gcn-align-r'):
-                        enh_emb = encoder.forward(use_edges, in_emb, rel_emb[abs(d.r_ij_idx)],torch.sgn(torch.tensor(d.r_ij_idx)).to(device))
+                        enh_emb = encoder.forward(use_edges, in_emb, rel_emb[abs(d.r_ij_idx)],torch.sgn(torch.tensor(d.r_ij_idx).to(device)))
                     elif encoder.name == 'mygcn':
                         use_edges = {}
                         for edge_n in edges:
@@ -372,7 +375,7 @@ class Experiment:
                 pos_score = decoder.forward(enh_emb, rel_emb, pos)
                 neg_score = decoder.forward(enh_emb, rel_emb, neg)
                 target = torch.ones(neg_score.size()).to(device)
-                loss = decoder.loss(pos_score, neg_score, target) * decoder.alpha
+                loss = decoder.loss(pos_score, neg_score, target) * decoder.alpha + 0.1 * (((rel_emb ** 2).mean()))
 
             else:
                 loss = decoder.forward(enh_emb, rel_emb, pos) * decoder.alpha
@@ -410,7 +413,7 @@ if __name__ == '__main__':
 
     parser.add_argument("--encoder", type=str, default="mygcn", nargs="?", help="which encoder to use: . max = 1")
     parser.add_argument("--edges_name", type=str, default="default", nargs="?", help="edges that listed as ... in the  dictionary")
-    parser.add_argument("--hiddens", type=str, default="100,100", help="hidden units in each hidden layer(including in_dim and out_dim), splitted with comma")
+    parser.add_argument("--hiddens", type=str, default="100,100,100", help="hidden units in each hidden layer(including in_dim and out_dim), splitted with comma")
     parser.add_argument("--heads", type=str, default="1,1", help="heads in each gat layer, splitted with comma")
     parser.add_argument("--attn_drop", type=float, default=0, help="dropout rate for gat layers")
 
@@ -426,8 +429,8 @@ if __name__ == '__main__':
     parser.add_argument("--wd", type=float, default=0, help="weight decay (L2 loss on parameters)")
     parser.add_argument("--dr", type=float, default=0, help="decay rate of lr")    
 
-    parser.add_argument("--train_dist", type=str, default="euclidean", help="distance function used in train (inner, cosine, euclidean, manhattan)")
-    parser.add_argument("--test_dist", type=str, default="euclidean", help="distance function used in test (inner, cosine, euclidean, manhattan)")
+    parser.add_argument("--train_dist", type=str, default="cosine", help="distance function used in train (inner, cosine, euclidean, manhattan)")
+    parser.add_argument("--test_dist", type=str, default="cosine", help="distance function used in test (inner, cosine, euclidean, manhattan)")
 
     parser.add_argument("--csls", type=int, default=0, help="whether to use csls in test (0 means not using)")
     parser.add_argument("--rerank", action="store_true", default=False, help="whether to use rerank in test")

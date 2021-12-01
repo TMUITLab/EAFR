@@ -104,7 +104,7 @@ class Encoder(torch.nn.Module):
                 self.gnn_layers.append(
                     #GCNAlign_GCNConv(in_channels=self.hiddens[l], out_channels=self.hiddens[l+1], improved=False, cached=True,layer_index = l, bias=bias)
                     MyGCN(in_channels=self.hiddens[l], out_channels=self.hiddens[l + 1], improved=False,
-                                     cached=True, bias=bias,feat_drop = self.feat_drop , activation = self.activation,device=device)
+                                     cached=True, bias=bias,feat_drop = self.feat_drop , activation = self.activation,device=device,layer_index = l)
                 )
             elif self.name == "gcn-align-r" or self.name .startswith( "gcn-align-ru"):
                 self.gnn_layers.append(
@@ -167,13 +167,15 @@ class Encoder(torch.nn.Module):
                     x = self.activation(x)
             return x
         elif self.name == "mygcn":
+            o = []
             for l in range(self.num_layers):
                 x = F.dropout(x, p=self.feat_drop, training=self.training)
                 x_ = self.gnn_layers[l](x, edges,r , s, r_ij)
-                x = x_
+                o += x_
+                x = x_[0]
                 if l != self.num_layers - 1:
                     x = self.activation(x)
-            return x
+            return torch.cat(o,dim=-1)
         else:
             for l in range(self.num_layers):
                 x = F.dropout(x, p=self.feat_drop, training=self.training)
@@ -181,7 +183,13 @@ class Encoder(torch.nn.Module):
                 x = x_
                 if l != self.num_layers - 1:
                     x = self.activation(x)
-            return x            
+            return x
+
+    def parameters(self, only_trainable=True):
+        l = []
+        for item in self.gnn_layers:
+            l += list(item.parameters())
+        return l
 
     def __repr__(self):
         return '{}(name={}): {}'.format(self.__class__.__name__, self.name, "\n".join([layer.__repr__() for layer in self.gnn_layers]))
@@ -240,7 +248,7 @@ class Decoder(torch.nn.Module):
             # self.func = SLEF-DESIGN()
         else:
             raise NotImplementedError("bad decoder name: " + self.name)
-        
+
         if params["sampling"] == "T":
             # self.sampling_method = multi_typed_sampling
             self.sampling_method = typed_sampling
@@ -313,7 +321,7 @@ class N_TransE(torch.nn.Module):
     def forward(self, e1, r, e2):
         pred = - torch.norm(e1 + r - e2, p=self.p, dim=1)
         return pred
-    
+
     def loss(self, pos_score, neg_score, target):
         return F.relu(pos_score + self.params[0] - neg_score).sum() + self.params[1] * F.relu(pos_score - self.params[2]).sum()
 
@@ -357,7 +365,7 @@ class MTransE_Align(torch.nn.Module):
         else:
             raise NotImplementedError
         return pred
-    
+
     def mapping(self, emb):
         return torch.matmul(emb, self.weight)
 
@@ -380,7 +388,7 @@ class AlignEA(torch.nn.Module):
 
     def forward(self, e1, r, e2):
         return torch.sum(torch.pow(e1 + r - e2, 2), 1)
-    
+
     def only_pos_loss(self, e1, r, e2):
         return - (F.logsigmoid(- torch.sum(torch.pow(e1 + r - e2, 2), 1))).sum()
 
@@ -419,7 +427,7 @@ class TransEdge(torch.nn.Module):
             raise NotImplementedError
         psi = torch.tanh(psi)
         return - self.func(e1, psi, e2)
-    
+
     def loss(self, pos_score, neg_score, target):
         return F.relu(pos_score - self.params[0]).sum() + self.params[1] * F.relu(self.params[2] - neg_score).sum()
 
@@ -462,7 +470,7 @@ class MMEA(torch.nn.Module):
         E2 = self.complex(e1_2, r_2, e2_2)
         E = E1 + E2
         return torch.cat((E1.view(-1, 1), E2.view(-1, 1), E.view(-1, 1)), dim=1)
-    
+
     def loss(self, pos_score, neg_score, target):
         E1_p_s, E2_p_s, E_p_s = torch.chunk(pos_score, 3, dim=1)
         E1_n_s, E2_n_s, E_n_s = torch.chunk(neg_score, 3, dim=1)
@@ -483,9 +491,9 @@ class TransE(torch.nn.Module):
         if self.transe_sp:
             pred = - F.normalize(e1 + r - e2, p=2, dim=1).sum(dim=1)
         else:
-            pred = - torch.norm(e1 + r - e2, p=self.p, dim=1)    
+            pred = - torch.norm(e1 + r - e2, p=self.p, dim=1)
         return pred
-    
+
     def only_pos_loss(self, e1, r, e2):
         e1 = F.dropout(e1, p=self.feat_drop, training=self.training)
         if self.p == 1:
@@ -543,7 +551,7 @@ class DistMult(torch.nn.Module):
         e1 = F.dropout(e1, p=self.feat_drop, training=self.training)
         pred = torch.sum(e1 * r * e2, dim=1)
         return pred
-    
+
     # def loss(self, pos_score, neg_score, target):
     #     return F.softplus(-pos_score).sum() + F.softplus(neg_score).sum()
 
@@ -557,7 +565,7 @@ class RotatE(torch.nn.Module):
         self.rel_range = (self.margin + 2.0) / (dim / 2)
         self.pi = 3.14159265358979323846
 
-    def forward(self, e1, r, e2):    
+    def forward(self, e1, r, e2):
         e1 = F.dropout(e1, p=self.feat_drop, training=self.training)
         re_head, im_head = torch.chunk(e1, 2, dim=1)
         re_tail, im_tail = torch.chunk(e2, 2, dim=1)
@@ -571,7 +579,7 @@ class RotatE(torch.nn.Module):
         score = torch.stack([re_score, im_score], dim=0)
         pred = score.norm(dim=0).sum(dim=-1)
         return pred
-    
+
     def loss(self, pos_score, neg_score, target):
         return - (F.logsigmoid(self.margin - pos_score) + F.logsigmoid(neg_score - self.margin)).mean()
 
@@ -604,7 +612,7 @@ class HAKE(torch.nn.Module):
         phase_score = torch.sum(torch.abs(torch.sin(phase_score / 2)), dim=1) * self.phase_weight
         r_score = torch.norm(r_score, dim=1) * self.modulus_weight
         return (phase_score + r_score)
-    
+
     def loss(self, pos_score, neg_score, target):
         return - (F.logsigmoid(self.margin - pos_score) + F.logsigmoid(neg_score - self.margin)).mean()
 
@@ -661,6 +669,8 @@ class MyGCN(torch.nn.Module):
         self.in_channels = in_channels;
         self.out_channels = out_channels
         self.activation = activation
+        self.layer_index = layer_index;
+        self.device = device;
         #self.mlp_1 = MLP(act=torch.tanh, hiddens=[2 * self.out_channels , self.out_channels ], l2_norm=True)
         #self.mlp_2 = MLP(act=torch.tanh, hiddens=[2 * self.out_channels , self.out_channels ], l2_norm=True)
         #self.mlp_3 = MLP(act=torch.tanh, hiddens=[2 * self.out_channels , self.out_channels ], l2_norm=True)
@@ -668,14 +678,18 @@ class MyGCN(torch.nn.Module):
         self.gcn = {}
         for i in range(10):
             pow = -0.5
-            if i < 4:
-                pow = -1
+            #if i < 4:
+            #    pow = -1
 
             self.gcn[i]  = GCNAlign_GCNConv(in_channels, out_channels,improved,cached,bias,layer_index,pow = pow,**kwargs).to(device)
         for i in range(10,12):
             self.gcn[i] = GCNAlign_GCNConv_relation(out_channels, out_channels, improved, cached, bias, layer_index, **kwargs).to(device)
 
-
+    def parameters(self, only_trainable=True):
+        l = []
+        for key in self.gcn:
+            l += list(self.gcn[key].parameters())
+        return l
 
     def drop(self,x):
 
@@ -683,34 +697,36 @@ class MyGCN(torch.nn.Module):
 
     def forward(self,  x,g,r,s,r_ij):
         num_nodes = x.shape[0]
+        dim = x.shape[1]
         num_rels = r.shape[0]
+        r_ij = r_ij[:,self.layer_index*dim : (self.layer_index + 1) * dim ]
+        r = r[:, self.layer_index * dim: (self.layer_index + 1) * dim]
+        zeros = torch.tensor(x.shape).to(self.device)
 
-        # r = self.drop(r)
-        # x = self.drop(x)
-        # xr = torch.cat([x, r], dim=0)
-        # x1_in = self.gcn[0](xr, g['in_nodes'])
-        # x1_in_a = self.activation(x1_in)
-
-        # x1_in_a = self.drop(x1_in_a)
-        # x2_in = self.gcn[1](x1_in_a, g['in_nodes'])[:num_nodes,:]
-        # x2_in_a = self.activation(x2_in)
-        #
         x1_out = self.gcn[2](x, g['default'])
-        x1_out_a = self.activation(x1_out)
+        x1_out = self.activation(x1_out)
 
-        x1_out_a = self.drop(x1_out_a)
-        x2_out = self.gcn[3](x1_out_a, g['default'])
-        x2_out_a = self.activation(x2_out)
+        x1_out = self.drop(x1_out)
+        x1_out = self.gcn[3](x1_out, g['default'])
 
-        # x2_in  = torch.nn.functional.normalize(x2_in, p=2)
-        x2_out  = torch.nn.functional.normalize(x2_out, p=2)
 
-        # o = torch.cat([x2_out],dim=-1)
-        return x2_out
+        xr = torch.cat([x, r], dim=0)
+        xr_out = self.gcn[10](xr, g['default'],r_ij,s)
+        xr_out = self.activation(xr_out)
+
+        xr_out = self.drop(xr_out)
+        xr_out = self.gcn[11](xr_out, g['default'],r_ij,s)[:num_nodes,:]
+
+        x1_out  = torch.nn.functional.normalize(x1_out, p=2)
+        xr_out  = torch.nn.functional.normalize(xr_out, p=2)
+        #x1_out_p = self.gather_information(x1_out, g['default'], 0, 2)
+
+        o = [x1_out,xr_out]
+        return o
 
     def gather_information(self , x, g, i,num_epoch = 2 ):
         x1 = torch.nn.functional.normalize(x,p=2)
-        x1 = self.gcn[i](x, g)
+        x1 = self.gcn[i](x1, g)
         for epoch in range(num_epoch-1):
             x1  =  x1 + 1.0/( 2 ** (epoch/2)) * self.gcn[i](x1, g)
             x1 = torch.nn.functional.normalize(x, p=2)
@@ -786,10 +802,10 @@ class GCNAlign_GCNConv(MessagePassing):
         self.cached = cached
         self.pow = pow
         self.layer_index = layer_index
-        self.weight = Parameter(torch.Tensor(1, self.out_channels ))
+        self.weight = nn.Parameter(torch.Tensor(1, self.out_channels ))
 
         if bias:
-            self.bias = Parameter(torch.Tensor(self.out_channels ))
+            self.bias = nn.Parameter(torch.Tensor(self.out_channels ))
         else:
             self.register_parameter('bias', None)
 
@@ -809,7 +825,7 @@ class GCNAlign_GCNConv(MessagePassing):
             edge_weight = torch.ones((edge_index.size(1), ), dtype=dtype,
                                      device=edge_index.device)
 
-        fill_value = 1 if not improved else 2
+        fill_value = 1.0 if not improved else 2.0
         edge_index, edge_weight = add_remaining_self_loops(
             edge_index, edge_weight, fill_value, num_nodes)
 
@@ -869,19 +885,20 @@ class GCNAlign_GCNConv_relation(MessagePassing):
         self.cached = cached
         self.layer_index = layer_index
         self.convE = ConvE( 0.2, out_channels,0)
-        self.weight = Parameter(torch.Tensor(1, self.in_channels  ))
+        self.weight = nn.Parameter(torch.eye(self.in_channels  ))
+
         #self.mlp_1 = MLP(act=torch.tanh, hiddens=[2 * self.in_channels , self.in_channels ], l2_norm=True)
         #self.mlp_2 = MLP(act=torch.tanh, hiddens=[2 * self.in_channels , self.in_channels ], l2_norm=True)
         #self.mlp_3 = MLP(act=torch.tanh, hiddens=[2 * self.in_channels , self.in_channels ], l2_norm=True)
         if bias:
-            self.bias = Parameter(torch.Tensor(self.in_channels ))
+            self.bias = nn.Parameter(torch.Tensor(self.in_channels ))
         else:
             self.register_parameter('bias', None)
 
         self.reset_parameters()
 
     def reset_parameters(self):
-        nn.init.constant_(self.weight,1)
+        #nn.init.constant_(self.weight,1)
 
         if self.bias is not None:
             nn.init.zeros_(self.bias)
@@ -905,12 +922,12 @@ class GCNAlign_GCNConv_relation(MessagePassing):
         deg_inv_sqrt = deg.pow(-0.5)
         deg_inv_sqrt[deg_inv_sqrt == float('inf')] = 0
 
-        return edge_index, deg_inv_sqrt[row] * edge_weight * deg_inv_sqrt[col]
+        return edge_index, deg_inv_sqrt[row] * deg_inv_sqrt[col]
 
 
     def forward(self, x, edge_index, r=None,signs=None,edge_weight = None):
         """"""
-        x = torch.mul(x, self.weight)
+        x = torch.matmul(x, self.weight)
         if self.cached and self.cached_result is not None:
             if edge_index.size(1) != self.cached_num_edges:
                 raise RuntimeError(
@@ -934,24 +951,20 @@ class GCNAlign_GCNConv_relation(MessagePassing):
         #left_content  = self.mlp_2(torch.cat([r_ij, x_j], -1))
         #last = self.mlp_3(torch.cat([right_content, left_content], -1))
         #r_ij = r_ij * signs[:,None]
-        return norm.view(-1, 1) * ( x_j +  r_ij * signs[:,None])
+        #return norm.view(-1, 1) * ( x_j +  r_ij * signs[:,None])
+        return norm.view(-1, 1) * (x_j + torch.matmul(r_ij * signs[:,None],self.weight ))
+        n = 4
+        r_ij = torch.nn.functional.normalize(r_ij,p=2) * torch.atan(torch.tensor(1).to(x_i.device))*4
 
-        n = 10
-        dim = r_ij.shape[0]//2
-        r_ij = torch.nn.functional.normalize(r_ij,p=2)
+        x_j1 = x_j.chunk(dim=-1, chunks=2)
+        r1 = r_ij.chunk(dim=-1, chunks=2)
+        x = torch.complex(x_j1[0], x_j1[1]) ** n
+        y1 = torch.complex((r1[0] * n).cos(),(r1[0] * n).sin())
+        y2 = torch.complex((r1[1] * n).cos(), (r1[1] * n).sin())
 
-        r_ij = r_ij.chunk(dim=-1,chunks=2)
-        x_j = x_j.chunk(dim=-1, chunks=2)
+        z = torch.cat([(x * y1).real,(x * y2).real],dim=-1)
 
-        r1 = torch.complex(r_ij[0], r_ij[1] *  signs[:, None])
-        r = torch.complex(r1.angle().cos(), r1.angle().sin())
-        x = torch.complex(x_j[0], x_j[1])
-
-        z = r * x
-
-        z = torch.cat([z.real,z.imag],dim=-1)
-
-        return norm.view(-1, 1) * z
+        return norm.view(-1, 1) * (x_j +  r_ij * signs[:,None]) * z
 
     def update(self, aggr_out):
         if self.bias is not None:
@@ -1219,7 +1232,7 @@ class HighWay(torch.nn.Module):
             nn.init.constant_(self.bias, 0)
         else:
             self.register_parameter('bias', None)
-    
+
     def forward(self, in_1, in_2):
         t = torch.mm(in_1, self.w)
         if self.bias is not None:
