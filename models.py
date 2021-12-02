@@ -683,7 +683,8 @@ class MyGCN(torch.nn.Module):
 
             self.gcn[i]  = GCNAlign_GCNConv(in_channels, out_channels,improved,cached,bias,layer_index,pow = pow,**kwargs).to(device)
         for i in range(10,12):
-            self.gcn[i] = GCNAlign_GCNConv_relation(out_channels, out_channels, improved, cached, bias, layer_index, **kwargs).to(device)
+            #self.gcn[i] = GCNAlign_GCNConv_relation(out_channels, out_channels, improved, cached, bias, layer_index,**kwargs).to(device)
+            self.gcn[i] = GCNAlign_GCNConv_relation1(out_channels, out_channels, heads = 1, **kwargs).to(device)
 
     def parameters(self, only_trainable=True):
         l = []
@@ -952,8 +953,7 @@ class GCNAlign_GCNConv_relation(MessagePassing):
         #last = self.mlp_3(torch.cat([right_content, left_content], -1))
         #r_ij = r_ij * signs[:,None]
         #return norm.view(-1, 1) * ( x_j +  r_ij * signs[:,None])
-        return norm.view(-1, 1) * (x_j + torch.matmul(r_ij * signs[:,None],self.weight ))
-        n = 4
+
         r_ij = torch.nn.functional.normalize(r_ij,p=2) * torch.atan(torch.tensor(1).to(x_i.device))*4
 
         x_j1 = x_j.chunk(dim=-1, chunks=2)
@@ -976,89 +976,81 @@ class GCNAlign_GCNConv_relation(MessagePassing):
                                    self.out_channels)
 
 # --- Encoding Modules ---
-class GCNAlign_GCNConv_unDirected(MessagePassing):
-    def __init__(self, in_channels, out_channels, improved=False, cached=False,
-                 bias=True, **kwargs):
-        super(GCNAlign_GCNConv_unDirected, self).__init__(aggr='add', **kwargs)
+class GCNAlign_GCNConv_relation1(MessagePassing):
+    def __init__(self, in_channels, out_channels, heads=1, concat=False,
+                 negative_slope=0.2, dropout=0,layer_index = 0, bias=False, **kwargs):
+        super(GCNAlign_GCNConv_relation1, self).__init__(aggr='add', **kwargs)
 
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.improved = improved
-        self.cached = cached
+        self.heads = heads
+        self.layer_index = layer_index
+        self.concat = concat
+        self.negative_slope = negative_slope
+        self.dropout = dropout
 
-        self.weight = Parameter(torch.Tensor(1, self.out_channels ))
+        self.weight = Parameter(
+            torch.Tensor(in_channels, heads * out_channels))
+        self.weight_2 = Parameter(
+            torch.Tensor(in_channels * 2, heads * out_channels))
+        self.att = Parameter(torch.Tensor(1, heads, 2 * out_channels))
 
-        if bias:
-            self.bias = Parameter(torch.Tensor(self.out_channels ))
+        if bias and concat:
+            self.bias = Parameter(torch.Tensor(heads * out_channels))
+        elif bias and not concat:
+            self.bias = Parameter(torch.Tensor(out_channels))
         else:
             self.register_parameter('bias', None)
 
         self.reset_parameters()
 
     def reset_parameters(self):
-        nn.init.ones_(self.weight)
+        nn.init.xavier_normal_(self.weight)
+        nn.init.xavier_normal_(self.weight_2)
+        nn.init.xavier_normal_(self.att)
         if self.bias is not None:
             nn.init.zeros_(self.bias)
-        self.cached_result = None
-        self.cached_num_edges = None
+    def forward(self, x, edge_index, r=None,signs=None, size=None):
+        if size is None and torch.is_tensor(x):
+            edge_index, _ = remove_self_loops(edge_index)
 
-    @staticmethod
-    def norm(edge_index, num_nodes, edge_weight=None, improved=False,
-             dtype=None):
-        if edge_weight is None:
-            edge_weight = torch.ones((edge_index.size(1), ), dtype=dtype,
-                                     device=edge_index.device)
+        return self.propagate(edge_index, size=size, x=x, r_ij=r,signs = signs)
 
-        #fill_value = 1 if not improved else 2
-        #edge_index, edge_weight = add_remaining_self_loops(
-        #edge_index, edge_weight, fill_value, num_nodes)
+    def message(self, edge_index_i, x_i, x_j, size_i, r_ij,signs):
+        r_ij = r_ij * signs[:,None]
+        x_i = torch.matmul(x_i, self.weight)
+        x_j = torch.matmul(torch.cat([x_j, r_ij], dim=-1), self.weight_2)
 
-        row, col = edge_index
-        deg_out = scatter_add(edge_weight, row, dim=0, dim_size=num_nodes)
-        deg_in = scatter_add(edge_weight, col, dim=0, dim_size=num_nodes)
-        deg_in_inv_sqrt = deg_in.pow(-1)
-        deg_in_inv_sqrt[deg_in_inv_sqrt == float('inf')] = 0
+        # Compute attention coefficients.
+        x_j = x_j.view(-1, self.heads, self.out_channels)
+        if x_i is None:
+            alpha = (x_j * self.att[:, :, self.out_channels:]).sum(dim=-1)
+        else:
+            x_i = x_i.view(-1, self.heads, self.out_channels)
+            alpha = (torch.cat([x_i, x_j], dim=-1) * self.att).sum(dim=-1)
 
-        deg_out_inv_sqrt = deg_out.pow(-1)
-        deg_out_inv_sqrt[deg_out_inv_sqrt == float('inf')] = 0
+        alpha = F.leaky_relu(alpha, self.negative_slope)
+        alpha = softmax(alpha, edge_index_i,num_nodes=size_i)
 
-        norm  = deg_out_inv_sqrt[row] * edge_weight * deg_in_inv_sqrt[col]
-        norm[row == col] = 1.0/(deg_in[row[row==col]] + deg_in[row[row==col]]) * edge_weight[row==col]
-        return edge_index, norm
+        # Sample attention coefficients stochastically.
+        # Sample attention coefficients stochastically.
+        alpha = F.dropout(alpha, p=self.dropout, training=self.training)
+        return ((x_j + r_ij.view(x_j.shape)) * alpha.view(-1, self.heads, 1)).mean(dim=1)
 
-    def forward(self, x, edge_index, edge_weight=None):
-        """"""
-        x = torch.mul(x, self.weight)
-
-        if self.cached and self.cached_result is not None:
-            if edge_index.size(1) != self.cached_num_edges:
-                raise RuntimeError(
-                    'Cached {} number of edges, but found {}. Please '
-                    'disable the caching behavior of this layer by removing '
-                    'the `cached=True` argument in its constructor.'.format(
-                        self.cached_num_edges, edge_index.size(1)))
-
-        if not self.cached or self.cached_result is None:
-            self.cached_num_edges = edge_index.size(1)
-            edge_index, norm = self.norm(edge_index, x.size(0), edge_weight,
-                                         self.improved, x.dtype)
-            self.cached_result = edge_index, norm
-
-        edge_index, norm = self.cached_result
-
-        return self.propagate(edge_index, x=x, norm=norm)
-
-    def message(self, x_j, norm):
-        return norm.view(-1, 1) * x_j
-
-    def update(self, aggr_out):
-        if self.bias is not None:
-            aggr_out = aggr_out + self.bias
-        return aggr_out
+    # def update(self, aggr_out):
+    #     if self.concat is True:
+    #         aggr_out = aggr_out.view(-1, self.heads * self.out_channels)
+    #     else:
+    #         aggr_out = aggr_out.mean(dim=1)
+    #
+    #     if self.bias is not None:
+    #         aggr_out = aggr_out + self.bias
+    #     return aggr_out
 
     def __repr__(self):
-        return '{}({}, {})'.format(self.__class__.__name__, self.in_channels,
-                                   self.out_channels)
+        return '{}({}, {}, heads={})'.format(self.__class__.__name__,
+                                             self.in_channels,
+                                             self.out_channels, self.heads)
 
 
 class NAEA_GATConv(MessagePassing):
