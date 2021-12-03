@@ -59,7 +59,7 @@ class Experiment:
     def evaluate(self, it, test, ins_emb, mapping_emb=None):
         t_test = time.time()
         top_k = [1, 3, 5, 10]
-        if(it % 10 == 9 ):
+        if(it % 10 == 9 and 1==2):
             #new_emb = d.ReGAL(ins_emb,test[:, 0],test[:, 1]);
             ins_emb = d.recursive_triple_embedding(d.triple_idx,ins_emb,self.rel_embeddings.weight.detach().cpu().numpy(),ins_emb,num_epoch=2)
             #ins_emb =  np.concatenate((ins_emb, new_emb), axis=-1)
@@ -411,7 +411,7 @@ if __name__ == '__main__':
     parser.add_argument("--start_bp", type=int, default=9, help="epoch of starting bootstrapping")
     parser.add_argument("--threshold", type=float, default=0.75, help="threshold of bootstrap alignment")
 
-    parser.add_argument("--encoder", type=str, default="mygcn", nargs="?", help="which encoder to use: . max = 1")
+    parser.add_argument("--encoder", type=str, default="gcn-align-ru", nargs="?", help="which encoder to use: . max = 1")
     parser.add_argument("--edges_name", type=str, default="default", nargs="?", help="edges that listed as ... in the  dictionary")
     parser.add_argument("--hiddens", type=str, default="100,100,100", help="hidden units in each hidden layer(including in_dim and out_dim), splitted with comma")
     parser.add_argument("--heads", type=str, default="1,1", help="heads in each gat layer, splitted with comma")
@@ -420,7 +420,7 @@ if __name__ == '__main__':
     parser.add_argument("--decoder", type=str, default="Align", nargs="?", help="which decoder to use: . min = 1")
     parser.add_argument("--sampling", type=str, default="N", help="negtive sampling method for each decoder")
     parser.add_argument("--k", type=str, default="25", help="negtive sampling number for each decoder")
-    parser.add_argument("--margin", type=str, default="1", help="margin for each margin based ranking loss (or params for other loss function)")
+    parser.add_argument("--margin", type=str, default="3", help="margin for each margin based ranking loss (or params for other loss function)")
     parser.add_argument("--alpha", type=str, default="1", help="weight for each margin based ranking loss")
     parser.add_argument("--beta", type=str, default="0.1", help="weight for each margin based ranking loss")
     parser.add_argument("--feat_drop", type=float, default=0, help="dropout rate for layers")
@@ -432,7 +432,7 @@ if __name__ == '__main__':
     parser.add_argument("--train_dist", type=str, default="cosine", help="distance function used in train (inner, cosine, euclidean, manhattan)")
     parser.add_argument("--test_dist", type=str, default="cosine", help="distance function used in test (inner, cosine, euclidean, manhattan)")
 
-    parser.add_argument("--csls", type=int, default=0, help="whether to use csls in test (0 means not using)")
+    parser.add_argument("--csls", type=int, default=10, help="whether to use csls in test (0 means not using)")
     parser.add_argument("--rerank", action="store_true", default=False, help="whether to use rerank in test")
 
     args = parser.parse_args()

@@ -73,9 +73,10 @@ def is_number(s):
 
 class AlignmentData:
 
-    def __init__(self, data_dir="data/D_W_15K_V1", rate=0.3, share=False, swap=False, val=0.0, with_r=False,OpenEa = False):
+    def __init__(self, data_dir="data/D_W_15K_V1", rate=0.3, share=False, swap=False, val=0.0, with_r=False,OpenEa = False,rev_relation  = True):
         t_ = time.time()
 
+        self.rev_relation = True
         self.rate = rate
         self.val = val
         if(OpenEa):
@@ -87,6 +88,8 @@ class AlignmentData:
                 data_dir + "/attr_triples_")
             self.ins_num = len(self.ins2id_dict)
             self.rel_num = len(self.rel2id_dict)
+            if(self.rev_relation):
+                self.rel_num = 2
             self.num_attr = len(self.attr2id_dict)
 
             self.triple_idx = self.OpenEa_load_triples(data_dir + "/rel_triples_", file_num=2)
@@ -104,11 +107,18 @@ class AlignmentData:
             self.rel2id_dict, self.id2rel_dict, [self.kg1_rel_ids, self.kg2_rel_ids] = self.load_dict(data_dir + "/rel_ids_", file_num=2)
             self.ins_num = len(self.ins2id_dict)
             self.rel_num = len(self.rel2id_dict)
+
             self.triple_idx = self.load_triples(data_dir + "/triples_", file_num=2)
             self.ill_idx = self.load_triples(data_dir + "/ill_ent_ids", file_num=1)
 
             np.random.shuffle(self.ill_idx)
             self.ill_train_idx, self.ill_val_idx, self.ill_test_idx = np.array(self.ill_idx[:int(len(self.ill_idx) // 1 * rate)], dtype=np.int32), np.array(self.ill_idx[int(len(self.ill_idx) // 1 * rate) : int(len(self.ill_idx) // 1 * (rate+val))], dtype=np.int32), np.array(self.ill_idx[int(len(self.ill_idx) // 1 * (rate+val)):], dtype=np.int32)
+
+        if (self.rev_relation):
+            self.rel_num *= 2
+            rev_triple_idx = []
+            for (h, r, t) in self.triple_idx:
+                self.triple_idx.append((h, r + self.rel_num // 2, t))
 
         self.ill_idx_dic = {}
         for x in self.ill_idx:
@@ -509,7 +519,9 @@ class AlignmentData:
                     out_nodes_dict[(r1, t)] = []
 
                     in_rels_dict[(h,r1)] = []
+                    in_rels_dict[(r1,h)] = []
                     out_rels_dict[(t,r1)] = []
+                    in_rels_dict[(r1, h)] = []
 
                 edge_dict[(h, t)].append(r)
                 edge_dict[(t, h)].append(-r)

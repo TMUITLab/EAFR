@@ -38,9 +38,10 @@ class MultipleEncoder(torch.nn.Module):
         self.encoders = []
         self.edges_name = edges_name
         i = 0
+        self.device = device
         self.name = name;
         for encoder_name in self.name.split(','):
-            enc = Encoder(encoder_name, hiddens, heads, activation, feat_drop, attn_drop, negative_slope, bias,device);
+            enc = Encoder(encoder_name, hiddens, heads, activation, feat_drop, attn_drop, negative_slope, bias,device).to(self.device);
             self.encoders.append(enc);
 
         if self.edges_name and ',' in self.edges_name:
@@ -48,7 +49,7 @@ class MultipleEncoder(torch.nn.Module):
         else:
             self.edges_name = ['default' for name in range(len((self.encoders)))]
 
-        self.coefs = torch.nn.Parameter(torch.tensor([1.0,.1,0.1,0.1,0.1]));
+        #self.coefs = torch.nn.Parameter(torch.tensor([1.0,.1,0.1,0.1,0.1])).to(self.device);
 
 
     def forward(self, edges, x, r=None,signs=None):
@@ -58,15 +59,15 @@ class MultipleEncoder(torch.nn.Module):
 
         for encoder in self.encoders:
             if(encoder.name == "naea" or encoder.name == "gcn-align-r" or encoder.name.startswith("gcn-align-ru")):
-                if( encoder.name.startswith("gcn-align-ru")):
+                if( encoder.name.startswith("gcn-align-r")):
                     n = 1
                     if(len(encoder.name)>12):
                         n = int(encoder.name[12:])
-                    embd = self.coefs[i] * encoder.forward(edges[self.edges_name[i]], x, r,signs)
+                    embd = encoder.forward(edges[self.edges_name[i]], x, r,signs)
                 else:
-                    embd = self.coefs[i]* encoder.forward(edges[self.edges_name[i]],x,r)
+                    embd = encoder.forward(edges[self.edges_name[i]],x,r)
             else:
-                embd = self.coefs[i] * encoder.forward(edges[self.edges_name[i]], x)
+                embd = encoder.forward(edges[self.edges_name[i]], x)
             embd = torch.nn.functional.normalize(embd, p=2, dim=1)
             embds.append(embd)
             i += 1
@@ -75,7 +76,7 @@ class MultipleEncoder(torch.nn.Module):
         #embd = torch.nn.functional.normalize(embd, p=2, dim=1)
         return  embd
     def parameters(self, only_trainable=True):
-        l = [self.coefs]
+        l = []
         for encoder in self.encoders:
             l += list(encoder.parameters())
         return l
@@ -106,13 +107,13 @@ class Encoder(torch.nn.Module):
                     MyGCN(in_channels=self.hiddens[l], out_channels=self.hiddens[l + 1], improved=False,
                                      cached=True, bias=bias,feat_drop = self.feat_drop , activation = self.activation,device=device,layer_index = l)
                 )
-            elif self.name == "gcn-align-r" or self.name .startswith( "gcn-align-ru"):
+            elif self.name .startswith( "gcn-align-ru"):
                 self.gnn_layers.append(
                     GCNAlign_GCNConv_relation(in_channels=self.hiddens[l], out_channels=self.hiddens[l+1], improved=False, cached=True,layer_index = l, bias=bias)
                 )
-            elif self.name == "gcn-align-u":
+            elif self.name == "gcn-align-r":
                 self.gnn_layers.append(
-                    GCNAlign_GCNConv_unDirected(in_channels=self.hiddens[l], out_channels=self.hiddens[l+1], improved=False, cached=True,layer_index = l, bias=bias)
+                    GCNAlign_GCNConv_relation1(in_channels=self.hiddens[l], out_channels=self.hiddens[l+1], heads = self.heads[l], layer_index = l, bias=bias)
                 )
             elif self.name == "naea":
                 self.gnn_layers.append(
@@ -158,7 +159,7 @@ class Encoder(torch.nn.Module):
             return (x, self.weight)
         # elif self.name == "SLEF-DESIGN":
         #     '''SLEF-DESIGN: special encoder forward'''
-        elif self.name.startswith('gcn-align-ru') :
+        elif self.name.startswith('gcn-align-ru') or self.name == "gcn-align-r" :
             for l in range(self.num_layers):
                 x = F.dropout(x, p=self.feat_drop, training=self.training)
                 x_ = self.gnn_layers[l](x, edges, r,s )
@@ -166,7 +167,7 @@ class Encoder(torch.nn.Module):
                 if l != self.num_layers - 1:
                     x = self.activation(x)
             return x
-        elif self.name == "mygcn":
+        elif self.name == "mygcn" :
             o = []
             for l in range(self.num_layers):
                 x = F.dropout(x, p=self.feat_drop, training=self.training)
@@ -676,13 +677,13 @@ class MyGCN(torch.nn.Module):
         #self.mlp_3 = MLP(act=torch.tanh, hiddens=[2 * self.out_channels , self.out_channels ], l2_norm=True)
         self.coefs = torch.nn.Parameter(torch.tensor([1.0,0.1,0.1,0.1,0.1]))
         self.gcn = {}
-        for i in range(10):
+        for i in range(2):
             pow = -0.5
             #if i < 4:
             #    pow = -1
 
             self.gcn[i]  = GCNAlign_GCNConv(in_channels, out_channels,improved,cached,bias,layer_index,pow = pow,**kwargs).to(device)
-        for i in range(10,12):
+        for i in range(2,4):
             #self.gcn[i] = GCNAlign_GCNConv_relation(out_channels, out_channels, improved, cached, bias, layer_index,**kwargs).to(device)
             self.gcn[i] = GCNAlign_GCNConv_relation1(out_channels, out_channels, heads = 1, **kwargs).to(device)
 
@@ -704,19 +705,19 @@ class MyGCN(torch.nn.Module):
         r = r[:, self.layer_index * dim: (self.layer_index + 1) * dim]
         zeros = torch.tensor(x.shape).to(self.device)
 
-        x1_out = self.gcn[2](x, g['default'])
+        x1_out = self.gcn[0](x, g['default'])
         x1_out = self.activation(x1_out)
 
         x1_out = self.drop(x1_out)
-        x1_out = self.gcn[3](x1_out, g['default'])
+        x1_out = self.gcn[1](x1_out, g['default'])
 
 
         xr = torch.cat([x, r], dim=0)
-        xr_out = self.gcn[10](xr, g['default'],r_ij,s)
+        xr_out = self.gcn[2](xr, g['default'],r_ij,s)
         xr_out = self.activation(xr_out)
 
         xr_out = self.drop(xr_out)
-        xr_out = self.gcn[11](xr_out, g['default'],r_ij,s)[:num_nodes,:]
+        xr_out = self.gcn[3](xr_out, g['default'],r_ij,s)[:num_nodes,:]
 
         x1_out  = torch.nn.functional.normalize(x1_out, p=2)
         xr_out  = torch.nn.functional.normalize(xr_out, p=2)
@@ -885,7 +886,6 @@ class GCNAlign_GCNConv_relation(MessagePassing):
         self.improved = improved
         self.cached = cached
         self.layer_index = layer_index
-        self.convE = ConvE( 0.2, out_channels,0)
         self.weight = nn.Parameter(torch.eye(self.in_channels  ))
 
         #self.mlp_1 = MLP(act=torch.tanh, hiddens=[2 * self.in_channels , self.in_channels ], l2_norm=True)
@@ -952,7 +952,7 @@ class GCNAlign_GCNConv_relation(MessagePassing):
         #left_content  = self.mlp_2(torch.cat([r_ij, x_j], -1))
         #last = self.mlp_3(torch.cat([right_content, left_content], -1))
         #r_ij = r_ij * signs[:,None]
-        #return norm.view(-1, 1) * ( x_j +  r_ij * signs[:,None])
+        return norm.view(-1, 1) * ( x_j +  r_ij * signs[:,None])
 
         r_ij = torch.nn.functional.normalize(r_ij,p=2) * torch.atan(torch.tensor(1).to(x_i.device))*4
 
@@ -977,9 +977,130 @@ class GCNAlign_GCNConv_relation(MessagePassing):
 
 # --- Encoding Modules ---
 class GCNAlign_GCNConv_relation1(MessagePassing):
-    def __init__(self, in_channels, out_channels, heads=1, concat=False,
-                 negative_slope=0.2, dropout=0,layer_index = 0, bias=False, **kwargs):
+    def __init__(self, in_channels, out_channels, heads=1, concat=True,
+                 negative_slope=0.2, dropout=0,layer_index = 0, bias=True, **kwargs):
         super(GCNAlign_GCNConv_relation1, self).__init__(aggr='add', **kwargs)
+
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.heads = heads
+        self.layer_index = layer_index
+        self.concat = concat
+        self.negative_slope = negative_slope
+        self.dropout = dropout
+        self.cached = True
+        self.improved = False
+
+        self.weight = Parameter(
+            torch.Tensor(in_channels, heads * out_channels))
+        self.weight_2 = Parameter(
+            torch.Tensor(in_channels * 2, heads * out_channels))
+        self.att = Parameter(torch.Tensor(1, heads, 3 * out_channels))
+
+        if bias and concat:
+            self.bias = Parameter(torch.Tensor(heads * out_channels))
+        elif bias and not concat:
+            self.bias = Parameter(torch.Tensor(out_channels))
+        else:
+            self.register_parameter('bias', None)
+
+        self.cached_result = None
+        self.cached_num_edges = None
+
+        self.reset_parameters()
+    @staticmethod
+    def norm(edge_index, num_nodes, edge_weight=None, improved=False,
+             dtype=None):
+        if edge_weight is None:
+            edge_weight = torch.ones((edge_index.size(1), ), dtype=dtype,
+                                     device=edge_index.device)
+
+        #fill_value = 1 if not improved else 2
+        #edge_index, edge_weight = add_remaining_self_loops(
+        #    edge_index, edge_weight, fill_value, num_nodes)
+
+        row, col = edge_index
+        deg = scatter_add(edge_weight, row, dim=0, dim_size=num_nodes)
+        deg_inv_sqrt = deg.pow(-0.5)
+        deg_inv_sqrt[deg_inv_sqrt == float('inf')] = 0
+
+        return edge_index, deg_inv_sqrt[row] * deg_inv_sqrt[col]
+
+    def reset_parameters(self):
+        nn.init.xavier_normal_(self.weight)
+        nn.init.xavier_normal_(self.weight_2)
+        nn.init.xavier_normal_(self.att)
+        if self.bias is not None:
+            nn.init.zeros_(self.bias)
+
+
+
+    def forward(self, x, edge_index, r=None,signs=None, size=None):
+        if size is None and torch.is_tensor(x):
+            edge_index, _ = remove_self_loops(edge_index)
+
+        if self.cached and self.cached_result is not None:
+            if edge_index.size(1) != self.cached_num_edges:
+                raise RuntimeError(
+                    'Cached {} number of edges, but found {}. Please '
+                    'disable the caching behavior of this layer by removing '
+                    'the `cached=True` argument in its constructor.'.format(
+                        self.cached_num_edges, edge_index.size(1)))
+
+        if not self.cached or self.cached_result is None:
+            self.cached_num_edges = edge_index.size(1)
+            edge_index, norm = self.norm(edge_index, x.size(0), None,
+                                         self.improved, x.dtype)
+            self.cached_result = edge_index, norm
+
+        edge_index, norm = self.cached_result
+
+        return self.propagate(edge_index, size=size, x=x, r_ij=r,signs = signs,nrm = norm)
+
+    def message(self, edge_index_i, x_i, x_j, size_i, r_ij,signs,nrm):
+        r_ij = r_ij * signs[:, None]
+        r_ij = torch.nn.functional.normalize(r_ij,p=2)
+        #self.weight_2 = torch.nn.functional.normalize( self.weight_2, p=2,dim=0)
+        #self.weight = torch.nn.functional.normalize(self.weight, p=2, dim=0)
+        x_j1 = x_j - 2 * r_ij * ((r_ij * x_j).sum(-1)[:,None])
+        #x_i = torch.matmul(x_i, self.weight)
+        #x_j1 = x_j
+        x_j = torch.cat([x_i,x_j1, r_ij],dim=-1)
+
+        # Compute attention coefficients.
+        x_j1 = x_j1.view(-1, self.heads, self.out_channels)
+        #r_ij = r_ij.view(-1, self.heads, self.out_channels)
+        x_j = x_j.view(-1, self.heads,3 * self.out_channels)
+        alpha = (x_j * self.att).sum(dim=-1)
+
+        alpha = F.leaky_relu(alpha, self.negative_slope)
+        alpha = softmax(alpha, edge_index_i,num_nodes=size_i)
+
+        # Sample attention coefficients stochastically.
+        # Sample attention coefficients stochastically.
+        alpha = F.dropout(alpha, p=self.dropout, training=self.training)
+        return (nrm.view(-1, 1,1) * (x_j1) * alpha.view(-1, self.heads, 1)).view(-1,self.heads * self.out_channels)
+
+
+    def update(self, aggr_out):
+        if self.concat is True:
+            aggr_out = aggr_out
+        else:
+            aggr_out = aggr_out.view(-1, self.heads , self.out_channels).mean(dim=1)
+
+        if self.bias is not None:
+            aggr_out = aggr_out + self.bias
+        return aggr_out
+
+    def __repr__(self):
+        return '{}({}, {}, heads={})'.format(self.__class__.__name__,
+                                             self.in_channels,
+                                             self.out_channels, self.heads)
+
+class GCNAlign_GCNConv_relation2(MessagePassing):
+    def __init__(self, in_channels, out_channels, heads=1, concat=True,
+                 negative_slope=0.2, dropout=0,layer_index = 0, bias=True, **kwargs):
+        super(GCNAlign_GCNConv_relation2, self).__init__(aggr='add', **kwargs)
 
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -1035,23 +1156,22 @@ class GCNAlign_GCNConv_relation1(MessagePassing):
         # Sample attention coefficients stochastically.
         # Sample attention coefficients stochastically.
         alpha = F.dropout(alpha, p=self.dropout, training=self.training)
-        return ((x_j + r_ij.view(x_j.shape)) * alpha.view(-1, self.heads, 1)).mean(dim=1)
+        return ((x_j) * alpha.view(-1, self.heads, 1)).view(-1,self.heads * self.out_channels)
 
-    # def update(self, aggr_out):
-    #     if self.concat is True:
-    #         aggr_out = aggr_out.view(-1, self.heads * self.out_channels)
-    #     else:
-    #         aggr_out = aggr_out.mean(dim=1)
-    #
-    #     if self.bias is not None:
-    #         aggr_out = aggr_out + self.bias
-    #     return aggr_out
+    def update(self, aggr_out):
+        if self.concat is True:
+            aggr_out = aggr_out
+        else:
+            aggr_out = aggr_out.view(-1, self.heads , self.out_channels).mean(dim=1)
+
+        if self.bias is not None:
+            aggr_out = aggr_out + self.bias
+        return aggr_out
 
     def __repr__(self):
         return '{}({}, {}, heads={})'.format(self.__class__.__name__,
                                              self.in_channels,
                                              self.out_channels, self.heads)
-
 
 class NAEA_GATConv(MessagePassing):
     def __init__(self, in_channels, out_channels, heads=1, concat=True,
