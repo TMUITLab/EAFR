@@ -678,12 +678,12 @@ class MyGCN(torch.nn.Module):
         self.coefs = torch.nn.Parameter(torch.tensor([1.0,0.1,0.1,0.1,0.1]))
         self.gcn = {}
         for i in range(2):
-            pow = -0.5
+            pow = -1
             #if i < 4:
             #    pow = -1
 
             self.gcn[i]  = GCNAlign_GCNConv(in_channels, out_channels,improved,cached,bias,layer_index,pow = pow,**kwargs).to(device)
-        for i in range(2,4):
+        for i in range(2,6):
             #self.gcn[i] = GCNAlign_GCNConv_relation(out_channels, out_channels, improved, cached, bias, layer_index,**kwargs).to(device)
             self.gcn[i] = GCNAlign_GCNConv_relation1(out_channels, out_channels, heads = 1, **kwargs).to(device)
 
@@ -701,83 +701,50 @@ class MyGCN(torch.nn.Module):
         num_nodes = x.shape[0]
         dim = x.shape[1]
         num_rels = r.shape[0]
-        r_ij = r_ij[:,self.layer_index*dim : (self.layer_index + 1) * dim ]
-        r = r[:, self.layer_index * dim: (self.layer_index + 1) * dim]
         zeros = torch.tensor(x.shape).to(self.device)
-
-        x1_out = self.gcn[0](x, g['default'])
-        x1_out = self.activation(x1_out)
-
-        x1_out = self.drop(x1_out)
-        x1_out = self.gcn[1](x1_out, g['default'])
-
-
         xr = torch.cat([x, r], dim=0)
-        xr_out = self.gcn[2](xr, g['default'],r_ij,s)
-        xr_out = self.activation(xr_out)
 
-        xr_out = self.drop(xr_out)
-        xr_out = self.gcn[3](xr_out, g['default'],r_ij,s)[:num_nodes,:]
+        #r_feature = self.gather_information(xr, g['rels'],0,num_epoch=1)[:num_nodes, :]
+        e_feature = self.avg(xr, g['default'], 1, num_epoch=1)[:num_nodes, :]
 
-        x1_out  = torch.nn.functional.normalize(x1_out, p=2)
-        xr_out  = torch.nn.functional.normalize(xr_out, p=2)
+        #r_star = self.gcns( r_feature, g['default'], 2 ,r_ij, s,num_epoch = 2)
+        e_star = self.gcns( e_feature, g['default'], 4 ,r_ij, s,num_epoch = 2)
+
+        #r_feature  = torch.nn.functional.normalize(r_feature, p=2)
+        #e_feature  = torch.nn.functional.normalize(e_feature, p=2)
+        #r_star  = torch.nn.functional.normalize(r_feature, p=2)
+        #e_star  = torch.nn.functional.normalize(e_feature, p=2)
         #x1_out_p = self.gather_information(x1_out, g['default'], 0, 2)
 
-        o = [x1_out,xr_out]
+        #so = [r_feature,r_star,e_star,e_feature]
+        o = [e_star, e_feature]
         return o
 
-    def gather_information(self , x, g, i,num_epoch = 2 ):
-        x1 = torch.nn.functional.normalize(x,p=2)
-        x1 = self.gcn[i](x1, g)
-        for epoch in range(num_epoch-1):
-            x1  =  x1 + 1.0/( 2 ** (epoch/2)) * self.gcn[i](x1, g)
-            x1 = torch.nn.functional.normalize(x, p=2)
-        return  x1
+    def avg(self , x, g, i,num_epoch = 1 ):
+        output = []
+        for epoch in range(num_epoch):
+            x =   self.gcn[i+epoch](x, g)
+            #x = torch.nn.functional.normalize(x, p=2)
+            output.append(x)
+        return  torch.cat(output,dim=-1)
 
-    def twolayer(self , x, g, i ,r=None, s=None):
-        x = self.drop(x)
-        if r != None:
-            x1  = self.gcn[i](x, g, r, s)
-        else:
-            x1  = self.gcn[i](x, g)
-        x1_a = self.activation(x1)
+    def gcns(self , x, g, i ,r=None, s=None,num_epoch = 2):
+        output = []
+        x = x
+        for epoch in range(num_epoch):
+            x = self.drop(x)
+            if r != None:
 
-        x1_a = self.drop(x1_a)
-        if r != None:
-            x2 = self.gcn[i + 1](x1_a, g, r, s)
-        else:
-            x2 = self.gcn[i + 1](x1_a, g)
+                x = self.gcn[i + epoch](x, g, r, s)
 
-        x2 = torch.nn.functional.normalize(x2, p=2)
-        return  x2
+            else:
+                x  = self.gcn[i+epoch](x, g)
+            #x1 = torch.nn.functional.normalize(x, p=2)
+            output.append(x);
+            x = self.activation(x)
 
-    def forward1(self, x,g,r,s,r_ij):
-        num_nodes = x.shape[0]
-        num_rels = r.shape[0]
+        return  torch.cat(output,dim=-1)
 
-        #z = torch.zeros(x.shape,requires_grad=False)
-        #zr = torch.zeros(r.shape,requires_grad=False)
-        xr = torch.cat([x, r], dim=0)
-
-        r_in    = self.gather_information(xr,g['in_rels'],0)[num_nodes:, :]
-        r_out   = self.gather_information(xr,g['out_rels'],2)[num_nodes:, :]
-
-        xr_in  = torch.cat([x, r_in], dim=0)
-        xr_out = torch.cat([x, r_out], dim=0)
-
-        xr = self.gather_information(xr , g['default'], 4)
-        x1 = xr[:num_nodes,:]
-        x2 = self.twolayer(xr , g['in_nodes'], 6)[:num_nodes, :]
-        x3 = self.twolayer(xr , g['out_nodes'], 8)[:num_nodes, :]
-        x4 = self.twolayer(x , g['default'], 10 , r_ij, s)[:num_nodes, :]
-
-        x1 = torch.nn.functional.normalize(x1, p=2)
-        x2 = torch.nn.functional.normalize(x2, p=2)
-        x3 = torch.nn.functional.normalize(x3, p=2)
-        x4 = torch.nn.functional.normalize(x4, p=2)
-
-        o = torch.cat([x1,x2,x3,x4],dim=-1)
-        return o
 
     # def loss(self, pos_score, neg_score, target):
     #
@@ -1058,7 +1025,6 @@ class GCNAlign_GCNConv_relation1(MessagePassing):
         return self.propagate(edge_index, size=size, x=x, r_ij=r,signs = signs,nrm = norm)
 
     def message(self, edge_index_i, x_i, x_j, size_i, r_ij,signs,nrm):
-        r_ij = r_ij * signs[:, None]
         r_ij = torch.nn.functional.normalize(r_ij,p=2)
         #self.weight_2 = torch.nn.functional.normalize( self.weight_2, p=2,dim=0)
         #self.weight = torch.nn.functional.normalize(self.weight, p=2, dim=0)
@@ -1079,7 +1045,7 @@ class GCNAlign_GCNConv_relation1(MessagePassing):
         # Sample attention coefficients stochastically.
         # Sample attention coefficients stochastically.
         alpha = F.dropout(alpha, p=self.dropout, training=self.training)
-        return (nrm.view(-1, 1,1) * (x_j1) * alpha.view(-1, self.heads, 1)).view(-1,self.heads * self.out_channels)
+        return ( (x_j1) * alpha.view(-1, self.heads, 1)).view(-1,self.heads * self.out_channels)
 
 
     def update(self, aggr_out):

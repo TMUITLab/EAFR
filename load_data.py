@@ -118,8 +118,8 @@ class AlignmentData:
             self.rel_num *= 2
             rev_triple_idx = []
             for (h, r, t) in self.triple_idx:
-                self.triple_idx.append((h, r + self.rel_num // 2, t))
-
+                rev_triple_idx.append((t, r + self.rel_num // 2, h))
+            self.triple_idx += rev_triple_idx
         self.ill_idx_dic = {}
         for x in self.ill_idx:
             self.ill_idx_dic[x[0]] = x[1]
@@ -501,6 +501,7 @@ class AlignmentData:
 
         in_rels_dict = {}
         out_rels_dict = {}
+        rels_dict = {}
 
         my_edge_dict5 = {}
         for (h, r, t) in triples:
@@ -510,21 +511,16 @@ class AlignmentData:
                     edge_dict[(h, t)] = []
                     edge_dict[(t, h)] = []
 
-                    in_nodes_dict[(h, t)] = []
-                    in_nodes_dict[(h, r1)] = []
-                    in_nodes_dict[(r1, t)] = []
+                    in_nodes_dict[(t, h)] = []
+                    in_nodes_dict[(t, r1)] = []
 
-                    out_nodes_dict[(t, h)] = []
-                    out_nodes_dict[(t, r1)] = []
-                    out_nodes_dict[(r1, t)] = []
+                    out_nodes_dict[(h, r1)] = []
+                    out_nodes_dict[(h, t)] = []
 
                     in_rels_dict[(h,r1)] = []
-                    in_rels_dict[(r1,h)] = []
                     out_rels_dict[(t,r1)] = []
-                    in_rels_dict[(r1, h)] = []
 
                 edge_dict[(h, t)].append(r)
-                edge_dict[(t, h)].append(-r)
 
         if with_r:
             edges = [[h, t] for (h, t) in edge_dict for r in edge_dict[(h, t)]]
@@ -535,13 +531,12 @@ class AlignmentData:
             out_nodes = [[h, t] for (h, t) in out_nodes_dict]
             in_rels = [[h, t] for (h, t) in in_rels_dict]
             out_rels = [[h, t] for (h, t) in out_rels_dict]
-            in_rels += [[e, e] for e in range(ins_num, ins_num + self.rel_num)]
-            out_rels += [[e, e] for e in range(ins_num, ins_num + self.rel_num)]
 
             edges = np.array(edges, dtype=np.int32)
             values = np.array(values, dtype=np.float32)
             r_ij = np.array(r_ij, dtype=np.float32)
             edges_dict = {'default': edges, 'in_nodes': in_nodes, 'out_nodes': out_nodes, 'in_rels': in_rels,
+                          'rels' : in_rels + out_rels,
                           'out_rels': out_rels}
             return edges_dict, values, r_ij
         else:

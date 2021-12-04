@@ -133,11 +133,8 @@ class Experiment:
             elif self.args.decoder == ["transr"]:
                 r_scale = self.hiddens[0] + 1
         else:
-            if self.args.encoder == "mygcn":
-                r_scale = self.args.hiddens.split(',').__len__() - 1;
-            else:
-                num_encoder = self.args.encoder.split(',').__len__()
-                e_scale, r_scale = 1, 1
+            num_encoder = self.args.encoder.split(',').__len__()
+            e_scale, r_scale = 1, 1
 
         self.ins_embeddings = nn.Embedding(d.ins_num, self.hiddens[0] * e_scale).to(device)
         self.rel_embeddings = nn.Embedding(d.rel_num, int(self.hiddens[0] * r_scale)).to(device)
@@ -411,9 +408,9 @@ if __name__ == '__main__':
     parser.add_argument("--start_bp", type=int, default=9, help="epoch of starting bootstrapping")
     parser.add_argument("--threshold", type=float, default=0.75, help="threshold of bootstrap alignment")
 
-    parser.add_argument("--encoder", type=str, default="gcn-align-ru", nargs="?", help="which encoder to use: . max = 1")
+    parser.add_argument("--encoder", type=str, default="mygcn", nargs="?", help="which encoder to use: . max = 1")
     parser.add_argument("--edges_name", type=str, default="default", nargs="?", help="edges that listed as ... in the  dictionary")
-    parser.add_argument("--hiddens", type=str, default="100,100,100", help="hidden units in each hidden layer(including in_dim and out_dim), splitted with comma")
+    parser.add_argument("--hiddens", type=str, default="100,100", help="hidden units in each hidden layer(including in_dim and out_dim), splitted with comma")
     parser.add_argument("--heads", type=str, default="1,1", help="heads in each gat layer, splitted with comma")
     parser.add_argument("--attn_drop", type=float, default=0, help="dropout rate for gat layers")
 
