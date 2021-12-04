@@ -705,7 +705,7 @@ class MyGCN(torch.nn.Module):
         xr = torch.cat([x, r], dim=0)
 
         #r_feature = self.gather_information(xr, g['rels'],0,num_epoch=1)[:num_nodes, :]
-        e_feature = self.avg(xr, g['default'], 1, num_epoch=1)[:num_nodes, :]
+        e_feature = self.avg(x, g['default'], 1, num_epoch=1)[:num_nodes, :]
 
         #r_star = self.gcns( r_feature, g['default'], 2 ,r_ij, s,num_epoch = 2)
         e_star = self.gcns( e_feature, g['default'], 4 ,r_ij, s,num_epoch = 2)
@@ -771,7 +771,7 @@ class GCNAlign_GCNConv(MessagePassing):
         self.cached = cached
         self.pow = pow
         self.layer_index = layer_index
-        self.weight = nn.Parameter(torch.Tensor(1, self.out_channels ))
+        self.weight = nn.Parameter(torch.Tensor(1, self.out_channels ),requires_grad = False)
 
         if bias:
             self.bias = nn.Parameter(torch.Tensor(self.out_channels ))
@@ -794,9 +794,9 @@ class GCNAlign_GCNConv(MessagePassing):
             edge_weight = torch.ones((edge_index.size(1), ), dtype=dtype,
                                      device=edge_index.device)
 
-        fill_value = 1.0 if not improved else 2.0
-        edge_index, edge_weight = add_remaining_self_loops(
-            edge_index, edge_weight, fill_value, num_nodes)
+        #fill_value = 1.0 if not improved else 2.0
+        #edge_index, edge_weight = add_remaining_self_loops(
+        #edge_index, edge_weight, fill_value, num_nodes)
 
         row, col = edge_index
         deg = scatter_add(edge_weight, row, dim=0, dim_size=num_nodes)

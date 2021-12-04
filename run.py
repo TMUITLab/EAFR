@@ -29,40 +29,41 @@ from torch.utils.tensorboard import SummaryWriter
 import logging
 
 
-
 class Experiment:
     def __init__(self, args):
         self.save = args.save
         self.save_prefix = "%s_%s" % (args.data_dir.split("/")[-1], args.log)
-        
+
         self.hiddens = list(map(int, args.hiddens.split(",")))
         self.heads = list(map(int, args.heads.split(",")))
-        
+
         self.args = args
         self.args.encoder = args.encoder.lower()
         self.args.decoder = args.decoder.lower().split(",")
-        self.args.sampling = args.sampling.split(",")        
+        self.args.sampling = args.sampling.split(",")
         self.args.k = list(map(int, args.k.split(",")))
-        self.args.margin = [float(x) if "-" not in x else list(map(float, x.split("-"))) for x in args.margin.split(",")]
+        self.args.margin = [float(x) if "-" not in x else list(map(float, x.split("-"))) for x in
+                            args.margin.split(",")]
         self.args.alpha = list(map(float, args.alpha.split(",")))
         self.args.beta = list(map(float, args.beta.split(",")))
         assert len(self.args.decoder) >= 1
         assert len(self.args.decoder) == len(self.args.sampling) and \
-                len(self.args.sampling) == len(self.args.k) and \
-                len(self.args.k) == len(self.args.alpha) and \
-                len(self.args.k) == len(self.args.beta)
+               len(self.args.sampling) == len(self.args.k) and \
+               len(self.args.k) == len(self.args.alpha) and \
+               len(self.args.k) == len(self.args.beta)
 
         self.cached_sample = {}
         self.best_result = ()
 
-
     def evaluate(self, it, test, ins_emb, mapping_emb=None):
         t_test = time.time()
         top_k = [1, 3, 5, 10]
-        if(it % 10 == 9 and 1==2):
-            #new_emb = d.ReGAL(ins_emb,test[:, 0],test[:, 1]);
-            ins_emb = d.recursive_triple_embedding(d.triple_idx,ins_emb,self.rel_embeddings.weight.detach().cpu().numpy(),ins_emb,num_epoch=2)
-            #ins_emb =  np.concatenate((ins_emb, new_emb), axis=-1)
+        if (it % 10 == 9 and 1 == 2):
+            # new_emb = d.ReGAL(ins_emb,test[:, 0],test[:, 1]);
+            ins_emb = d.recursive_triple_embedding(d.triple_idx, ins_emb,
+                                                   self.rel_embeddings.weight.detach().cpu().numpy(), ins_emb,
+                                                   num_epoch=2)
+            # ins_emb =  np.concatenate((ins_emb, new_emb), axis=-1)
 
         if mapping_emb is not None:
             logger.info("using mapping")
@@ -72,12 +73,11 @@ class Experiment:
         right_emb = ins_emb[test[:, 1]]
 
         distance = - sim(left_emb, right_emb, metric=self.args.test_dist, normalize=True, csls_k=self.args.csls)
-        if(it % 10 == 9 and 1==2):
-
+        if (it % 10 == 9 and 1 == 2):
             t1 = time.time()
             distance = d.justification(distance, test[:, 0], test[:, 1])
             t2 = time.time()
-            print('justification process lasts for ' , t2-t1)
+            print('justification process lasts for ', t2 - t1)
         if self.args.rerank:
             indices = np.argsort(np.argsort(distance, axis=1), axis=1)
             indices_ = np.argsort(np.argsort(distance.T, axis=1), axis=1)
@@ -87,10 +87,11 @@ class Experiment:
         pool = multiprocessing.Pool(processes=len(tasks))
         reses = list()
         for task in tasks:
-            reses.append(pool.apply_async(multi_cal_rank, (task, distance[task, :], distance[:, task], top_k, self.args)))
+            reses.append(
+                pool.apply_async(multi_cal_rank, (task, distance[task, :], distance[:, task], top_k, self.args)))
         pool.close()
         pool.join()
-        
+
         acc_l2r, acc_r2l = np.array([0.] * len(top_k)), np.array([0.] * len(top_k))
         mean_l2r, mean_r2l, mrr_l2r, mrr_r2l = 0., 0., 0., 0.
         for res in reses:
@@ -108,9 +109,15 @@ class Experiment:
         for i in range(len(top_k)):
             acc_l2r[i] = round(acc_l2r[i] / len(test), 4)
             acc_r2l[i] = round(acc_r2l[i] / len(test), 4)
-        
-        logger.info("l2r: acc of top {} = {}, mr = {:.3f}, mrr = {:.3f}, time = {:.4f} s ".format(top_k, acc_l2r.tolist(), mean_l2r, mrr_l2r, time.time() - t_test))
-        logger.info("r2l: acc of top {} = {}, mr = {:.3f}, mrr = {:.3f}, time = {:.4f} s \n".format(top_k, acc_r2l.tolist(), mean_r2l, mrr_r2l, time.time() - t_test))
+
+        logger.info(
+            "l2r: acc of top {} = {}, mr = {:.3f}, mrr = {:.3f}, time = {:.4f} s ".format(top_k, acc_l2r.tolist(),
+                                                                                          mean_l2r, mrr_l2r,
+                                                                                          time.time() - t_test))
+        logger.info(
+            "r2l: acc of top {} = {}, mr = {:.3f}, mrr = {:.3f}, time = {:.4f} s \n".format(top_k, acc_r2l.tolist(),
+                                                                                            mean_r2l, mrr_r2l,
+                                                                                            time.time() - t_test))
         for i, k in enumerate(top_k):
             writer.add_scalar("l2r_HitsAt{}".format(k), acc_l2r[i], it)
             writer.add_scalar("r2l_HitsAt{}".format(k), acc_r2l[i], it)
@@ -145,8 +152,8 @@ class Experiment:
             nn.init.uniform_(tensor=self.rel_embeddings.weight, a=-rel_range, b=rel_range)
             if self.args.decoder == ["hake"]:
                 r_dim = int(self.hiddens[0] / 2)
-                nn.init.ones_(tensor=self.rel_embeddings.weight[:, r_dim : 2*r_dim])
-                nn.init.zeros_(tensor=self.rel_embeddings.weight[:, 2*r_dim : 3*r_dim])
+                nn.init.ones_(tensor=self.rel_embeddings.weight[:, r_dim: 2 * r_dim])
+                nn.init.zeros_(tensor=self.rel_embeddings.weight[:, 2 * r_dim: 3 * r_dim])
         else:
             nn.init.xavier_normal_(self.ins_embeddings.weight)
             nn.init.xavier_normal_(self.rel_embeddings.weight)
@@ -155,8 +162,9 @@ class Experiment:
             self.rel_embeddings.weight.data = F.normalize(self.rel_embeddings.weight, p=2, dim=1)
         elif "transr" in self.args.decoder:
             assert self.args.pre != ""
-            self.ins_embeddings.weight.data = torch.from_numpy(np.load(self.args.pre+"_ins.npy")).to(device)
-            self.rel_embeddings.weight[:, :self.hiddens[0]].data = torch.from_numpy(np.load(self.args.pre+"_rel.npy")).to(device)
+            self.ins_embeddings.weight.data = torch.from_numpy(np.load(self.args.pre + "_ins.npy")).to(device)
+            self.rel_embeddings.weight[:, :self.hiddens[0]].data = torch.from_numpy(
+                np.load(self.args.pre + "_rel.npy")).to(device)
         self.enh_ins_emb = self.ins_embeddings.weight.cpu().detach().numpy()
         self.mapping_ins_emb = None
 
@@ -165,13 +173,16 @@ class Experiment:
 
         graph_encoder = None
         if self.args.encoder:
-            if( ',' not in self.args.encoder):
-                graph_encoder = Encoder(self.args.encoder, self.hiddens, self.heads+[1], activation=F.elu, feat_drop=self.args.feat_drop, attn_drop=self.args.attn_drop, negative_slope=0.2, bias=False,device=device).to(device)
+            if (',' not in self.args.encoder):
+                graph_encoder = Encoder(self.args.encoder, self.hiddens, self.heads + [1], activation=F.elu,
+                                        feat_drop=self.args.feat_drop, attn_drop=self.args.attn_drop,
+                                        negative_slope=0.2, bias=False, device=device).to(device)
                 logger.info(graph_encoder)
             else:
                 graph_encoder = MultipleEncoder(self.args.encoder, self.hiddens, self.heads + [1], activation=F.elu,
-                                          feat_drop=self.args.feat_drop, attn_drop=self.args.attn_drop, negative_slope=0.2,
-                                          bias=False,edges_name = args.edges_name,device=device).to(device)
+                                                feat_drop=self.args.feat_drop, attn_drop=self.args.attn_drop,
+                                                negative_slope=0.2,
+                                                bias=False, edges_name=args.edges_name, device=device).to(device)
                 logger.info(graph_encoder)
         knowledge_decoder = []
         for idx, decoder_name in enumerate(self.args.decoder):
@@ -191,7 +202,10 @@ class Experiment:
             }).to(device))
         logger.info(knowledge_decoder)
 
-        params = nn.ParameterList([self.ins_embeddings.weight, self.rel_embeddings.weight] + [p for k_d in knowledge_decoder for p in list(k_d.parameters())] + (list(graph_encoder.parameters()) if self.args.encoder else []))
+        params = nn.ParameterList(
+            [self.ins_embeddings.weight, self.rel_embeddings.weight] + [p for k_d in knowledge_decoder for p in
+                                                                        list(k_d.parameters())] + (
+                list(graph_encoder.parameters()) if self.args.encoder else []))
         opt = optim.Adagrad(params, lr=self.args.lr, weight_decay=self.args.wd)
         if self.args.dr:
             scheduler = optim.lr_scheduler.ExponentialLR(opt, self.args.dr)
@@ -207,15 +221,19 @@ class Experiment:
                     continue
                 t_ = time.time()
                 if k_d.print_name.startswith("["):  # Run Independent Model (only decoder)
-                    loss = self.train_1_epoch(it, opt, None, k_d, d.ins_G_edges_idx, d.triple_idx, d.ill_train_idx, [d.kg1_ins_ids, d.kg2_ins_ids], d.boot_triple_idx, d.boot_pair_dix, self.ins_embeddings.weight, self.rel_embeddings.weight)
-                else:              # Run Basic Model (encoder - decoder)
-                    loss = self.train_1_epoch(it, opt, graph_encoder, k_d, d.ins_G_edges_idx, d.triple_idx,d.ill_train_idx, [d.kg1_ins_ids, d.kg2_ins_ids], d.boot_triple_idx,d.boot_pair_dix, self.ins_embeddings.weight,self.rel_embeddings.weight)
+                    loss = self.train_1_epoch(it, opt, None, k_d, d.ins_G_edges_idx, d.triple_idx, d.ill_train_idx,
+                                              [d.kg1_ins_ids, d.kg2_ins_ids], d.boot_triple_idx, d.boot_pair_dix,
+                                              self.ins_embeddings.weight, self.rel_embeddings.weight)
+                else:  # Run Basic Model (encoder - decoder)
+                    loss = self.train_1_epoch(it, opt, graph_encoder, k_d, d.ins_G_edges_idx, d.triple_idx,
+                                              d.ill_train_idx, [d.kg1_ins_ids, d.kg2_ins_ids], d.boot_triple_idx,
+                                              d.boot_pair_dix, self.ins_embeddings.weight, self.rel_embeddings.weight)
 
                 if hasattr(k_d, "mapping"):
                     self.mapping_ins_emb = k_d.mapping(self.ins_embeddings.weight).cpu().detach().numpy()
                 loss_name = "loss_" + k_d.print_name.replace("[", "_").replace("]", "_")
                 writer.add_scalar(loss_name, loss, it)
-                logger.info("epoch: %d\t%s: %.8f\ttime: %ds" % (it, loss_name, loss, int(time.time()-t_)) )
+                logger.info("epoch: %d\t%s: %.8f\ttime: %ds" % (it, loss_name, loss, int(time.time() - t_)))
 
             if self.args.dr:
                 scheduler.step()
@@ -229,7 +247,7 @@ class Experiment:
                         emb = beta * self.enh_ins_emb + (1 - beta) * self.ins_embeddings.weight.cpu().detach().numpy()
                     else:
                         emb = self.enh_ins_emb
-                    if len(d.ill_val_idx) > 0 :
+                    if len(d.ill_val_idx) > 0:
                         result = self.evaluate(it, d.ill_val_idx, emb, self.mapping_ins_emb)
                     else:
                         result = self.evaluate(it, d.ill_test_idx, emb, self.mapping_ins_emb)
@@ -242,8 +260,12 @@ class Experiment:
                     else:
                         logger.info("Early stop, best result:")
                         acc_l2r, mean_l2r, mrr_l2r, acc_r2l, mean_r2l, mrr_r2l = self.best_result
-                        logger.info("l2r: acc of top {} = {}, mr = {:.3f}, mrr = {:.3f} ".format(top_k, acc_l2r, mean_l2r, mrr_l2r))
-                        logger.info("r2l: acc of top {} = {}, mr = {:.3f}, mrr = {:.3f} \n".format(top_k, acc_r2l, mean_r2l, mrr_r2l))
+                        logger.info(
+                            "l2r: acc of top {} = {}, mr = {:.3f}, mrr = {:.3f} ".format(top_k, acc_l2r, mean_l2r,
+                                                                                         mrr_l2r))
+                        logger.info(
+                            "r2l: acc of top {} = {}, mr = {:.3f}, mrr = {:.3f} \n".format(top_k, acc_r2l, mean_r2l,
+                                                                                           mrr_r2l))
                     break
                 self.best_result = result
 
@@ -255,14 +277,17 @@ class Experiment:
                         emb = beta * self.enh_ins_emb + (1 - beta) * self.ins_embeddings.weight.cpu().detach().numpy()
                     else:
                         emb = self.enh_ins_emb
-                d.labeled_alignment, A, B = bootstrapping(ref_sim_mat=sim(emb[d.ill_test_idx[:, 0]], emb[d.ill_test_idx[:, 1]], metric=self.args.test_dist, normalize=True, csls_k=0), 
-                                                        ref_ent1=d.ill_test_idx[:, 0].tolist(), 
-                                                        ref_ent2=d.ill_test_idx[:, 1].tolist(), 
-                                                        labeled_alignment=d.labeled_alignment, th=self.args.threshold, top_k=10, is_edit=False)
+                d.labeled_alignment, A, B = bootstrapping(
+                    ref_sim_mat=sim(emb[d.ill_test_idx[:, 0]], emb[d.ill_test_idx[:, 1]], metric=self.args.test_dist,
+                                    normalize=True, csls_k=0),
+                    ref_ent1=d.ill_test_idx[:, 0].tolist(),
+                    ref_ent2=d.ill_test_idx[:, 1].tolist(),
+                    labeled_alignment=d.labeled_alignment, th=self.args.threshold, top_k=10, is_edit=False)
                 if d.labeled_alignment:
                     d.boot_triple_idx = boot_update_triple(A, B, d.triple_idx)
-                    d.boot_pair_dix = [(A[i], B[i])for i in range(len(A))]
-                    logger.info("Bootstrapping: + " + str(len(A)) + " ills, " + str(len(d.boot_triple_idx)) + " triples.")
+                    d.boot_pair_dix = [(A[i], B[i]) for i in range(len(A))]
+                    logger.info(
+                        "Bootstrapping: + " + str(len(A)) + " ills, " + str(len(d.boot_triple_idx)) + " triples.")
 
         # Save Embeddings
         if self.save != "":
@@ -279,51 +304,56 @@ class Experiment:
             np.save(self.save + "/%s_rel.npy" % (time_str), self.rel_embeddings.weight.cpu().detach().numpy())
             logger.info("Embeddings saved!")
 
-    def train_1_epoch(self, it, opt, encoder, decoder, edges, triples, ills, ids, boot_triples, boot_pairs, ins_emb, rel_emb):
+    def train_1_epoch(self, it, opt, encoder, decoder, edges, triples, ills, ids, boot_triples, boot_pairs, ins_emb,
+                      rel_emb):
 
         if encoder:
             encoder.train()
 
         decoder.train()
         losses = []
-        if "pos_"+decoder.print_name not in self.cached_sample or it % self.args.update == 0:
+        if "pos_" + decoder.print_name not in self.cached_sample or it % self.args.update == 0:
             if decoder.name in ["align", "mtranse_align", "n_r_align"]:
                 if decoder.boot:
-                    self.cached_sample["pos_"+decoder.print_name] = ills.tolist() + boot_pairs
+                    self.cached_sample["pos_" + decoder.print_name] = ills.tolist() + boot_pairs
                 else:
-                    self.cached_sample["pos_"+decoder.print_name] = ills.tolist()
-                self.cached_sample["pos_"+decoder.print_name] = np.array(self.cached_sample["pos_"+decoder.print_name])
+                    self.cached_sample["pos_" + decoder.print_name] = ills.tolist()
+                self.cached_sample["pos_" + decoder.print_name] = np.array(
+                    self.cached_sample["pos_" + decoder.print_name])
             else:
                 if decoder.boot:
-                    self.cached_sample["pos_"+decoder.print_name] = triples + boot_triples
+                    self.cached_sample["pos_" + decoder.print_name] = triples + boot_triples
                 else:
-                    self.cached_sample["pos_"+decoder.print_name] = triples
-            np.random.shuffle(self.cached_sample["pos_"+decoder.print_name])
+                    self.cached_sample["pos_" + decoder.print_name] = triples
+            np.random.shuffle(self.cached_sample["pos_" + decoder.print_name])
             # print("train size:", len(self.cached_sample["pos_"+decoder.print_name]))
-            
-        train = self.cached_sample["pos_"+decoder.print_name]
+
+        train = self.cached_sample["pos_" + decoder.print_name]
         if self.args.train_batch_size == -1:
             train_batch_size = len(train)
         else:
             train_batch_size = self.args.train_batch_size
         for i in range(0, len(train), train_batch_size):
-            pos_batch = train[i:i+train_batch_size]
+            pos_batch = train[i:i + train_batch_size]
 
-            if (decoder.print_name+str(i) not in self.cached_sample or it % self.args.update == 0) and decoder.sampling_method:
-                self.cached_sample[decoder.print_name+str(i)] = decoder.sampling_method(pos_batch, triples, ills, ids, decoder.k, params={
-                    "emb": self.enh_ins_emb,
-                    "metric": self.args.test_dist,
-                })
-            
+            if (decoder.print_name + str(
+                    i) not in self.cached_sample or it % self.args.update == 0) and decoder.sampling_method:
+                self.cached_sample[decoder.print_name + str(i)] = decoder.sampling_method(pos_batch, triples, ills, ids,
+                                                                                          decoder.k, params={
+                        "emb": self.enh_ins_emb,
+                        "metric": self.args.test_dist,
+                    })
+
             if decoder.sampling_method:
-                neg_batch = self.cached_sample[decoder.print_name+str(i)]
-    
+                neg_batch = self.cached_sample[decoder.print_name + str(i)]
+
             opt.zero_grad()
             if decoder.sampling_method:
                 neg = torch.LongTensor(neg_batch).to(device)
                 if neg.size(0) > len(pos_batch) * decoder.k:
                     pos = torch.LongTensor(pos_batch).repeat(decoder.k * 2, 1).to(device)
-                elif hasattr(decoder.func, "loss") and decoder.name not in ["rotate", "hake", "conve", "mmea", "n_transe"]:
+                elif hasattr(decoder.func, "loss") and decoder.name not in ["rotate", "hake", "conve", "mmea",
+                                                                            "n_transe"]:
                     pos = torch.LongTensor(pos_batch).to(device)
                 else:
                     pos = torch.LongTensor(pos_batch).repeat(decoder.k, 1).to(device)
@@ -335,36 +365,44 @@ class Experiment:
             if encoder:
 
                 in_emb = ins_emb
-                if(',' in args.encoder):
+                if (',' in args.encoder):
                     use_edges = {}
                     for edge_n in edges:
                         use_edges[edge_n] = torch.LongTensor(edges[edge_n]).to(device)
 
-
-
-                    in_emb = torch.cat([ins_emb,rel_emb],axis=0)
-                    enh_emb = encoder.forward(use_edges, in_emb, rel_emb[abs(d.r_ij_idx)] if encoder and encoder.name == "naea" or encoder.name.__contains__('gcn-align-r') else  None
-                                              ,torch.sgn(torch.tensor(d.r_ij_idx).to(device)) if encoder and encoder.name == "naea" or encoder.name.__contains__('gcn-align-r') else  None)
-                    #enh_emb = torch.cat([enh_emb,in_emb],-1)
-                    #in_emb = in_emb.reshape(in_emb.shape[0]*4,-1)
+                    in_emb = torch.cat([ins_emb, rel_emb], axis=0)
+                    enh_emb = encoder.forward(use_edges, in_emb, rel_emb[
+                        abs(d.r_ij_idx)] if encoder and encoder.name == "naea" or encoder.name.__contains__(
+                        'gcn-align-r') else None
+                                              , torch.sgn(torch.tensor(d.r_ij_idx).to(
+                            device)) if encoder and encoder.name == "naea" or encoder.name.__contains__(
+                            'gcn-align-r') else None)
+                    # enh_emb = torch.cat([enh_emb,in_emb],-1)
+                    # in_emb = in_emb.reshape(in_emb.shape[0]*4,-1)
                     # enh_emb = enh_emb.reshape(in_emb.shape[0]//4,-1)
                     rel_emb = enh_emb[ins_emb.shape[0]:, ]
                     enh_emb = enh_emb[:ins_emb.shape[0], ]
                 else:
                     use_edges = torch.LongTensor(edges['default']).to(device)
                     if encoder.name.startswith('gcn-align-r'):
-                        enh_emb = encoder.forward(use_edges, in_emb, rel_emb[abs(d.r_ij_idx)],torch.sgn(torch.tensor(d.r_ij_idx).to(device)))
+                        enh_emb = encoder.forward(use_edges, in_emb, rel_emb[abs(d.r_ij_idx)],
+                                                  torch.sgn(torch.tensor(d.r_ij_idx).to(device)))
                     elif encoder.name == 'mygcn':
                         use_edges = {}
                         for edge_n in edges:
                             use_edges[edge_n] = torch.LongTensor(edges[edge_n]).to(device).t()
-                        enh_emb = encoder.forward(use_edges, in_emb, rel_emb,torch.sgn(torch.tensor(d.r_ij_idx)).to(device),rel_emb[abs(d.r_ij_idx)])
+                        enh_emb = encoder.forward(use_edges, in_emb, rel_emb,
+                                                  torch.sgn(torch.tensor(d.r_ij_idx)).to(device),
+                                                  rel_emb[abs(d.r_ij_idx)])
                     else:
-                        enh_emb = encoder.forward(use_edges, in_emb, rel_emb[abs(d.r_ij_idx)] if encoder and encoder.name == "naea"  or encoder.name.__contains__('gcn-align-r') else  None)
+                        enh_emb = encoder.forward(use_edges, in_emb, rel_emb[
+                            abs(d.r_ij_idx)] if encoder and encoder.name == "naea" or encoder.name.__contains__(
+                            'gcn-align-r') else None)
             else:
                 enh_emb = ins_emb
-            
-            self.enh_ins_emb = enh_emb[0].cpu().detach().numpy() if encoder and encoder.name == "naea" else enh_emb.cpu().detach().numpy()
+
+            self.enh_ins_emb = enh_emb[
+                0].cpu().detach().numpy() if encoder and encoder.name == "naea" else enh_emb.cpu().detach().numpy()
             if decoder.name == "n_r_align":
                 rel_emb = ins_emb
 
@@ -376,9 +414,9 @@ class Experiment:
 
             else:
                 loss = decoder.forward(enh_emb, rel_emb, pos) * decoder.alpha
-            
+
             loss.backward()
-            
+
             opt.step()
             losses.append(loss.item())
 
@@ -387,8 +425,9 @@ class Experiment:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--openea_data", type=bool, default=False, required=False,help="")
-    parser.add_argument("--data_dir", type=str, default="data/DBP15K/zh_en", required=False,help="input dataset file directory, ('data/DBP15K/zh_en', 'data/DWY100K/dbp_wd')")
+    parser.add_argument("--openea_data", type=bool, default=False, required=False, help="")
+    parser.add_argument("--data_dir", type=str, default="data/DBP15K/zh_en", required=False,
+                        help="input dataset file directory, ('data/DBP15K/zh_en', 'data/DWY100K/dbp_wd')")
     parser.add_argument("--rate", type=float, default=0.3, help="training set rate")
     parser.add_argument("--val", type=float, default=0.0, help="valid set rate")
     parser.add_argument("--save", default="", help="the output dictionary of the model and embedding")
@@ -400,7 +439,8 @@ if __name__ == '__main__':
     parser.add_argument("--check", type=int, default=5, help="check point")
     parser.add_argument("--update", type=int, default=5, help="number of epoch for updating negtive samples")
     parser.add_argument("--train_batch_size", type=int, default=-1, help="train batch_size (-1 means all in)")
-    parser.add_argument("--early", action="store_true", default=False,help="whether to use early stop")  # Early stop when the Hits@1 score begins to drop on the validation sets, checked every 10 epochs.
+    parser.add_argument("--early", action="store_true", default=False,
+                        help="whether to use early stop")  # Early stop when the Hits@1 score begins to drop on the validation sets, checked every 10 epochs.
     parser.add_argument("--share", action="store_true", default=False, help="whether to share ill emb")
     parser.add_argument("--swap", action="store_true", default=False, help="whether to swap ill in triple")
 
@@ -409,25 +449,30 @@ if __name__ == '__main__':
     parser.add_argument("--threshold", type=float, default=0.75, help="threshold of bootstrap alignment")
 
     parser.add_argument("--encoder", type=str, default="mygcn", nargs="?", help="which encoder to use: . max = 1")
-    parser.add_argument("--edges_name", type=str, default="default", nargs="?", help="edges that listed as ... in the  dictionary")
-    parser.add_argument("--hiddens", type=str, default="100,100", help="hidden units in each hidden layer(including in_dim and out_dim), splitted with comma")
+    parser.add_argument("--edges_name", type=str, default="default", nargs="?",
+                        help="edges that listed as ... in the  dictionary")
+    parser.add_argument("--hiddens", type=str, default="100,100",
+                        help="hidden units in each hidden layer(including in_dim and out_dim), splitted with comma")
     parser.add_argument("--heads", type=str, default="1,1", help="heads in each gat layer, splitted with comma")
     parser.add_argument("--attn_drop", type=float, default=0, help="dropout rate for gat layers")
 
     parser.add_argument("--decoder", type=str, default="Align", nargs="?", help="which decoder to use: . min = 1")
     parser.add_argument("--sampling", type=str, default="N", help="negtive sampling method for each decoder")
     parser.add_argument("--k", type=str, default="25", help="negtive sampling number for each decoder")
-    parser.add_argument("--margin", type=str, default="3", help="margin for each margin based ranking loss (or params for other loss function)")
+    parser.add_argument("--margin", type=str, default="3",
+                        help="margin for each margin based ranking loss (or params for other loss function)")
     parser.add_argument("--alpha", type=str, default="1", help="weight for each margin based ranking loss")
     parser.add_argument("--beta", type=str, default="0.1", help="weight for each margin based ranking loss")
     parser.add_argument("--feat_drop", type=float, default=0, help="dropout rate for layers")
 
     parser.add_argument("--lr", type=float, default=0.005, help="initial learning rate")
     parser.add_argument("--wd", type=float, default=0, help="weight decay (L2 loss on parameters)")
-    parser.add_argument("--dr", type=float, default=0, help="decay rate of lr")    
+    parser.add_argument("--dr", type=float, default=0, help="decay rate of lr")
 
-    parser.add_argument("--train_dist", type=str, default="cosine", help="distance function used in train (inner, cosine, euclidean, manhattan)")
-    parser.add_argument("--test_dist", type=str, default="cosine", help="distance function used in test (inner, cosine, euclidean, manhattan)")
+    parser.add_argument("--train_dist", type=str, default="euclidean",
+                        help="distance function used in train (inner, cosine, euclidean, manhattan)")
+    parser.add_argument("--test_dist", type=str, default="euclidean",
+                        help="distance function used in test (inner, cosine, euclidean, manhattan)")
 
     parser.add_argument("--csls", type=int, default=10, help="whether to use csls in test (0 means not using)")
     parser.add_argument("--rerank", action="store_true", default=False, help="whether to use rerank in test")
@@ -448,8 +493,10 @@ if __name__ == '__main__':
     device = torch.device("cuda" if args.cuda and torch.cuda.is_available() else "cpu")
 
     # Load Data
-    d = AlignmentData(data_dir=args.data_dir, rate=args.rate, share=args.share, swap=args.swap, val=args.val, with_r=args.encoder.lower()=="naea" or args.encoder.lower()=="mygcn"or args.encoder.lower().__contains__('gcn-align-r'),
-                      OpenEa  =args.openea_data)
+    d = AlignmentData(data_dir=args.data_dir, rate=args.rate, share=args.share, swap=args.swap, val=args.val,
+                      with_r=args.encoder.lower() == "naea" or args.encoder.lower() == "mygcn" or args.encoder.lower().__contains__(
+                          'gcn-align-r'),
+                      OpenEa=args.openea_data)
     logger.info(d)
 
     experiment = Experiment(args=args)
