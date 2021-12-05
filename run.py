@@ -206,7 +206,7 @@ class Experiment:
             [self.ins_embeddings.weight, self.rel_embeddings.weight] + [p for k_d in knowledge_decoder for p in
                                                                         list(k_d.parameters())] + (
                 list(graph_encoder.parameters()) if self.args.encoder else []))
-        opt = optim.RMSprop(params, lr=self.args.lr, weight_decay=self.args.wd)
+        opt = optim.adagrad(params, lr=self.args.lr, weight_decay=self.args.wd)
         if self.args.dr:
             scheduler = optim.lr_scheduler.ExponentialLR(opt, self.args.dr)
         logger.info(params)
@@ -390,10 +390,13 @@ class Experiment:
                     elif encoder.name == 'mygcn':
                         use_edges = {}
                         for edge_n in edges:
-                            use_edges[edge_n] = torch.LongTensor(edges[edge_n]).to(device).t()
+                            if(edge_n.endswith('_cnt')):
+                                use_edges[edge_n] = torch.FloatTensor(edges[edge_n]).to(device).t()
+                            else:
+                                use_edges[edge_n] = torch.LongTensor(edges[edge_n]).to(device).t()
                         enh_emb = encoder.forward(use_edges, in_emb, rel_emb,
                                                   torch.sgn(torch.tensor(d.r_ij_idx)).to(device),
-                                                  rel_emb[abs(d.r_ij_idx)])
+                                                  d.r_ij_idx)
                     else:
                         enh_emb = encoder.forward(use_edges, in_emb, rel_emb[
                             abs(d.r_ij_idx)] if encoder and encoder.name == "naea" or encoder.name.__contains__(

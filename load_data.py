@@ -505,7 +505,6 @@ class AlignmentData:
                 r1 = r + self.ins_num
                 if (h, t) not in edge_dict:
                     edge_dict[(h, t)] = []
-                    edge_dict[(t, h)] = []
 
                 if (t, h) not in in_nodes_dict:
                     in_nodes_dict[(t, h)] = []
@@ -523,7 +522,6 @@ class AlignmentData:
                     out_rels_dict[(t,r1)] = []
 
                 edge_dict[(h, t)].append(r)
-                edge_dict[(t, h)].append(r)
 
                 in_nodes_dict[(t, h)].append(r)
                 in_nodes_dict[(t, r1)].append(h)
