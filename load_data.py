@@ -522,14 +522,14 @@ class AlignmentData:
                 if (t, r1) not in out_rels_dict:
                     out_rels_dict[(t,r1)] = []
 
-                edge_dict[(h, t)].append(r1)
-                edge_dict[(t, h)].append(r1)
+                edge_dict[(h, t)].append(r)
+                edge_dict[(t, h)].append(r)
 
-                in_nodes_dict[(t, h)].append(r1)
+                in_nodes_dict[(t, h)].append(r)
                 in_nodes_dict[(t, r1)].append(h)
 
                 out_nodes_dict[(h, r1)].append(t)
-                out_nodes_dict[(h, t)].append(r1)
+                out_nodes_dict[(h, t)].append(r)
 
                 in_rels_dict[(h,r1)].append(t)
                 out_rels_dict[(t,r1)].append(h)
