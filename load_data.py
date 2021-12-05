@@ -525,19 +525,19 @@ class AlignmentData:
                 edge_dict[(h, t)].append(r1)
                 edge_dict[(t, h)].append(r1)
 
-                in_nodes_dict[(t, h)].append(r)
-                in_nodes_dict[(t, r1)].append(r)
+                in_nodes_dict[(t, h)].append(r1)
+                in_nodes_dict[(t, r1)].append(h)
 
-                out_nodes_dict[(h, r1)].append(r)
-                out_nodes_dict[(h, t)].append(r)
+                out_nodes_dict[(h, r1)].append(t)
+                out_nodes_dict[(h, t)].append(r1)
 
-                in_rels_dict[(h,r1)].append(r)
-                out_rels_dict[(t,r1)].append(r)
+                in_rels_dict[(h,r1)].append(t)
+                out_rels_dict[(t,r1)].append(h)
 
 
         if with_r:
             edges = [[h, t] for (h, t) in edge_dict for r in edge_dict[(h, t)]]
-            values = [1 for (h, t) in edge_dict for r in edge_dict[(h, t)]]
+            values = [1.0/edge_dict[(h, t)].__len__() for (h, t) in edge_dict for r in edge_dict[(h, t)]]
             r_ij = [(r) for (h, t) in edge_dict for r in edge_dict[(h, t)]]
 
             in_nodes = [[h, t] for (h, t) in in_nodes_dict]
@@ -550,7 +550,7 @@ class AlignmentData:
             r_ij = np.array(r_ij, dtype=np.float32)
             edges_dict = {'default': edges, 'in_nodes': in_nodes, 'out_nodes': out_nodes, 'in_rels': in_rels,
                           'rels' : in_rels + out_rels,
-                          'out_rels': out_rels}
+                          'out_rels': out_rels, 'default_cnt':values}
             return edges_dict, values, r_ij
         else:
             in_nodes = [[h, t] for (h, t) in in_nodes_dict]
