@@ -393,7 +393,7 @@ class Experiment:
                             use_edges[edge_n] = torch.LongTensor(edges[edge_n]).to(device).t()
                         enh_emb = encoder.forward(use_edges, in_emb, rel_emb,
                                                   torch.sgn(torch.tensor(d.r_ij_idx)).to(device),
-                                                  d.r_ij_idx)
+                                                  rel_emb[abs(d.r_ij_idx)])
                     else:
                         enh_emb = encoder.forward(use_edges, in_emb, rel_emb[
                             abs(d.r_ij_idx)] if encoder and encoder.name == "naea" or encoder.name.__contains__(
