@@ -206,7 +206,7 @@ class Experiment:
             [self.ins_embeddings.weight, self.rel_embeddings.weight] + [p for k_d in knowledge_decoder for p in
                                                                         list(k_d.parameters())] + (
                 list(graph_encoder.parameters()) if self.args.encoder else []))
-        opt = optim.adagrad(params, lr=self.args.lr, weight_decay=self.args.wd)
+        opt = optim.Adagrad(params, lr=self.args.lr, weight_decay=self.args.wd)
         if self.args.dr:
             scheduler = optim.lr_scheduler.ExponentialLR(opt, self.args.dr)
         logger.info(params)
@@ -396,7 +396,7 @@ class Experiment:
                                 use_edges[edge_n] = torch.LongTensor(edges[edge_n]).to(device).t()
                         enh_emb = encoder.forward(use_edges, in_emb, rel_emb,
                                                   torch.sgn(torch.tensor(d.r_ij_idx)).to(device),
-                                                  d.r_ij_idx)
+                                                  torch.LongTensor(d.r_ij_idx).to(device))
                     else:
                         enh_emb = encoder.forward(use_edges, in_emb, rel_emb[
                             abs(d.r_ij_idx)] if encoder and encoder.name == "naea" or encoder.name.__contains__(

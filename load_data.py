@@ -506,37 +506,41 @@ class AlignmentData:
                 if (h, t) not in edge_dict:
                     edge_dict[(h, t)] = []
 
-                if (t, h) not in in_nodes_dict:
-                    in_nodes_dict[(t, h)] = []
-                if (t, r1) not in in_nodes_dict:
-                    in_nodes_dict[(t, r1)] = []
+                if (h, t) not in in_nodes_dict:
+                    in_nodes_dict[(h, t)] = []
+                if (r1, t) not in in_nodes_dict:
+                    in_nodes_dict[(r1, t)] = []
 
-                if (h, r1) not in out_nodes_dict:
-                    out_nodes_dict[(h, r1)] = []
-                if (h, t) not in out_nodes_dict:
-                    out_nodes_dict[(h, t)] = []
+                if (r1,h) not in out_nodes_dict:
+                    out_nodes_dict[(r1,h)] = []
+                if (t,h) not in out_nodes_dict:
+                    out_nodes_dict[(t,h)] = []
 
-                if (h, r1) not in in_rels_dict:
-                    in_rels_dict[(h,r1)] = []
-                if (t, r1) not in out_rels_dict:
-                    out_rels_dict[(t,r1)] = []
+                if (r1,h) not in in_rels_dict:
+                    in_rels_dict[(r1,h)] = []
+                if (r1, t) not in out_rels_dict:
+                    out_rels_dict[(r1, t)] = []
 
                 edge_dict[(h, t)].append(r)
 
-                in_nodes_dict[(t, h)].append(r)
-                in_nodes_dict[(t, r1)].append(h)
+                in_nodes_dict[(h, t)].append(r)
+                in_nodes_dict[(r1, t)].append(h)
 
-                out_nodes_dict[(h, r1)].append(t)
-                out_nodes_dict[(h, t)].append(r)
+                out_nodes_dict[(r1, h)].append(t)
+                out_nodes_dict[(t, h)].append(r)
 
-                in_rels_dict[(h,r1)].append(t)
-                out_rels_dict[(t,r1)].append(h)
-
+                in_rels_dict[(r1,h)].append(t)
+                out_rels_dict[(r1,t)].append(h)
 
         if with_r:
-            edges = [[h, t] for (h, t) in edge_dict for r in edge_dict[(h, t)]]
-            values = [1.0/edge_dict[(h, t)].__len__() for (h, t) in edge_dict for r in edge_dict[(h, t)]]
-            r_ij = [(r) for (h, t) in edge_dict for r in edge_dict[(h, t)]]
+            edges = [[h, t] for (h, t) in edge_dict]
+            values = [1.0 / edge_dict[(h, t)].__len__() for (h, t) in edge_dict for r in edge_dict[(h, t)]]
+            cnt = self.rel_num
+            r_ij = []
+            for (h, t) in edge_dict:
+                for r in edge_dict[(h, t)]:
+                    r_ij.append([r,cnt])
+                cnt += 1
 
             in_nodes = [[h, t] for (h, t) in in_nodes_dict]
             out_nodes = [[h, t] for (h, t) in out_nodes_dict]
