@@ -495,32 +495,36 @@ class AlignmentData:
 
     def gen_sparse_graph_from_triples(self, triples, ins_num, with_r=False):
         edge_dict = {}
-
         in_nodes_dict = {}
         out_nodes_dict = {}
-
         in_rels_dict = {}
         out_rels_dict = {}
-        rels_dict = {}
 
-        my_edge_dict5 = {}
         for (h, r, t) in triples:
             if h != t:
+                r1 = r + self.ins_num
                 if (h, t) not in edge_dict:
-                    r1 = r + self.ins_num
                     edge_dict[(h, t)] = []
                     edge_dict[(t, h)] = []
 
+                if (t, h) not in in_nodes_dict:
                     in_nodes_dict[(t, h)] = []
+                if (t, r1) not in in_nodes_dict:
                     in_nodes_dict[(t, r1)] = []
 
+                if (h, r1) not in out_nodes_dict:
                     out_nodes_dict[(h, r1)] = []
+                if (h, t) not in out_nodes_dict:
                     out_nodes_dict[(h, t)] = []
 
+                if (h, r1) not in out_nodes_dict:
                     in_rels_dict[(h,r1)] = []
-                    out_rels_dict[(t,r1)] = []
+                    in_rels_dict[(t,r1)] = []
 
                 edge_dict[(h, t)].append(r)
+                edge_dict[(t, h)].append(r1)
+
+
 
         if with_r:
             edges = [[h, t] for (h, t) in edge_dict for r in edge_dict[(h, t)]]

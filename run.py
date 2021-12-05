@@ -206,7 +206,7 @@ class Experiment:
             [self.ins_embeddings.weight, self.rel_embeddings.weight] + [p for k_d in knowledge_decoder for p in
                                                                         list(k_d.parameters())] + (
                 list(graph_encoder.parameters()) if self.args.encoder else []))
-        opt = optim.Adagrad(params, lr=self.args.lr, weight_decay=self.args.wd)
+        opt = optim.RMSprop(params, lr=self.args.lr, weight_decay=self.args.wd)
         if self.args.dr:
             scheduler = optim.lr_scheduler.ExponentialLR(opt, self.args.dr)
         logger.info(params)
@@ -393,7 +393,7 @@ class Experiment:
                             use_edges[edge_n] = torch.LongTensor(edges[edge_n]).to(device).t()
                         enh_emb = encoder.forward(use_edges, in_emb, rel_emb,
                                                   torch.sgn(torch.tensor(d.r_ij_idx)).to(device),
-                                                  rel_emb[abs(d.r_ij_idx)])
+                                                  d.r_ij_idx)
                     else:
                         enh_emb = encoder.forward(use_edges, in_emb, rel_emb[
                             abs(d.r_ij_idx)] if encoder and encoder.name == "naea" or encoder.name.__contains__(
@@ -410,7 +410,7 @@ class Experiment:
                 pos_score = decoder.forward(enh_emb, rel_emb, pos)
                 neg_score = decoder.forward(enh_emb, rel_emb, neg)
                 target = torch.ones(neg_score.size()).to(device)
-                loss = decoder.loss(pos_score, neg_score, target) * decoder.alpha + 0.1 * (((rel_emb ** 2).mean()))
+                loss = decoder.loss(pos_score, neg_score, target) * decoder.alpha
 
             else:
                 loss = decoder.forward(enh_emb, rel_emb, pos) * decoder.alpha
@@ -437,7 +437,7 @@ if __name__ == '__main__':
     parser.add_argument("--seed", type=int, default=2020, help="random seed")
     parser.add_argument("--epoch", type=int, default=1000, help="number of epochs to train")
     parser.add_argument("--check", type=int, default=5, help="check point")
-    parser.add_argument("--update", type=int, default=5, help="number of epoch for updating negtive samples")
+    parser.add_argument("--update", type=int, default=1, help="number of epoch for updating negtive samples")
     parser.add_argument("--train_batch_size", type=int, default=-1, help="train batch_size (-1 means all in)")
     parser.add_argument("--early", action="store_true", default=False,
                         help="whether to use early stop")  # Early stop when the Hits@1 score begins to drop on the validation sets, checked every 10 epochs.
@@ -457,8 +457,8 @@ if __name__ == '__main__':
     parser.add_argument("--attn_drop", type=float, default=0, help="dropout rate for gat layers")
 
     parser.add_argument("--decoder", type=str, default="Align", nargs="?", help="which decoder to use: . min = 1")
-    parser.add_argument("--sampling", type=str, default="N", help="negtive sampling method for each decoder")
-    parser.add_argument("--k", type=str, default="25", help="negtive sampling number for each decoder")
+    parser.add_argument("--sampling", type=str, default="R", help="negtive sampling method for each decoder")
+    parser.add_argument("--k", type=str, default="1", help="negtive sampling number for each decoder")
     parser.add_argument("--margin", type=str, default="3",
                         help="margin for each margin based ranking loss (or params for other loss function)")
     parser.add_argument("--alpha", type=str, default="1", help="weight for each margin based ranking loss")
@@ -469,7 +469,7 @@ if __name__ == '__main__':
     parser.add_argument("--wd", type=float, default=0, help="weight decay (L2 loss on parameters)")
     parser.add_argument("--dr", type=float, default=0, help="decay rate of lr")
 
-    parser.add_argument("--train_dist", type=str, default="euclidean",
+    parser.add_argument("--train_dist", type=str, default="manhattan",
                         help="distance function used in train (inner, cosine, euclidean, manhattan)")
     parser.add_argument("--test_dist", type=str, default="euclidean",
                         help="distance function used in test (inner, cosine, euclidean, manhattan)")
