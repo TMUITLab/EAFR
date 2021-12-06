@@ -707,9 +707,9 @@ class MyGCN(torch.nn.Module):
         g1 = r_ij
         #r_ij = self.avg1(zrs, g1.t(), 0, None, num_epoch=1)[num_rels:, :]
         r_ij = self.avg(zrs, g1.t(),num_epoch=1)[num_rels:, :]
-        #r_ij = r_feature1[:-num_rels,:]
+        e_feature = self.avg(x, g['default'], num_epoch=1)
         #r_feature = self.avg(xr, g['rels'],1,None,num_epoch=1)[:num_nodes, :]
-        e_feature = self.avg(x, g['default'], 2,None,num_epoch=1)
+        #e_feature = self.avg1(x, g['default'], 2,None,num_epoch=1)
 
         #r_star = self.gcns( r_feature, g['default'], 3 ,r_ij, s,num_epoch = 2)
         e_star = self.gcns( e_feature, g['default'], 5 ,r_ij, s, None,num_epoch = 2)
