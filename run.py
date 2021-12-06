@@ -448,7 +448,7 @@ if __name__ == '__main__':
     parser.add_argument("--swap", action="store_true", default=False, help="whether to swap ill in triple")
 
     parser.add_argument("--bootstrap", action="store_true", default=False, help="whether to use bootstrap")
-    parser.add_argument("--start_bp", type=int, default=9, help="epoch of starting bootstrapping")
+    parser.add_argument("--start_bp", type=int, default=4, help="epoch of starting bootstrapping")
     parser.add_argument("--threshold", type=float, default=0.75, help="threshold of bootstrap alignment")
 
     parser.add_argument("--encoder", type=str, default="mygcn", nargs="?", help="which encoder to use: . max = 1")
@@ -461,7 +461,7 @@ if __name__ == '__main__':
 
     parser.add_argument("--decoder", type=str, default="Align", nargs="?", help="which decoder to use: . min = 1")
     parser.add_argument("--sampling", type=str, default="R", help="negtive sampling method for each decoder")
-    parser.add_argument("--k", type=str, default="1", help="negtive sampling number for each decoder")
+    parser.add_argument("--k", type=str, default="4", help="negtive sampling number for each decoder")
     parser.add_argument("--margin", type=str, default="3",
                         help="margin for each margin based ranking loss (or params for other loss function)")
     parser.add_argument("--alpha", type=str, default="1", help="weight for each margin based ranking loss")

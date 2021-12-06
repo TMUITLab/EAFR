@@ -705,11 +705,11 @@ class MyGCN(torch.nn.Module):
         zrs = torch.cat([r,zeros], dim=0)
         xr = torch.cat([x, r], dim=0)
         g1 = r_ij
-        #r_ij = self.avg1(zrs, g1.t(), 0, None, num_epoch=1)[num_rels:, :]
-        r_ij = self.avg(zrs, g1.t(),num_epoch=1)[num_rels:, :]
-        e_feature = self.avg(x, g['default'], num_epoch=1)
+        r_ij = self.avg1(zrs, g1.t(), 0, None, num_epoch=1)[num_rels:, :]
+        #r_ij = self.avg(zrs, g1.t(),num_epoch=1)[num_rels:, :]
+        #e_feature = self.avg(x, g['default'], num_epoch=1)
         #r_feature = self.avg(xr, g['rels'],1,None,num_epoch=1)[:num_nodes, :]
-        #e_feature = self.avg1(x, g['default'], 2,None,num_epoch=1)
+        e_feature = self.avg1(x, g['default'], 2,None,num_epoch=1)
 
         #r_star = self.gcns( r_feature, g['default'], 3 ,r_ij, s,num_epoch = 2)
         e_star = self.gcns( e_feature, g['default'], 5 ,r_ij, s, None,num_epoch = 2)
@@ -721,8 +721,8 @@ class MyGCN(torch.nn.Module):
         #x1_out_p = self.gather_information(x1_out, g['default'], 0, 2)
 
         #so = [r_feature,r_star,e_star,e_feature]
-        o = [e_star, e_feature]
-        return o
+        #o = [e_star, e_feature]
+        return [e_star]
     def avg(self , x, g ,num_epoch = 1 ):
         output = []
         for epoch in range(num_epoch):
@@ -740,18 +740,18 @@ class MyGCN(torch.nn.Module):
 
     def gcns(self , x, g, i ,r=None, s=None,edge_weight=None,num_epoch = 2):
         output = []
-        x = x
+        x = self.activation(x)
+        output.append(x)
         for epoch in range(num_epoch):
             x = self.drop(x)
             if r != None:
-
                 x = self.gcn[i + epoch](x, g, r, s,edge_weight = edge_weight)
-
             else:
                 x  = self.gcn[i+epoch](x, g)
             #x1 = torch.nn.functional.normalize(x, p=2)
+            x = self.activation(x)
             output.append(x);
-            #x = self.activation(x)
+
 
         return  torch.cat(output,dim=-1)
 
