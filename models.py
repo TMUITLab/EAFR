@@ -21,6 +21,7 @@ from utils import *
 import math
 from torch.nn import Parameter
 import torch_geometric
+import torch_scatter
 from torch_geometric.nn.conv import MessagePassing
 from torch_geometric.utils import remove_self_loops, add_self_loops, softmax, add_remaining_self_loops
 from torch_geometric.nn import GCNConv as Base_CNConv,Sequential,JumpingKnowledge
@@ -681,12 +682,9 @@ class MyGCN(torch.nn.Module):
         self.gcn = {}
         for i in range(3):
             pow = -1
-            #if i < 4:
-            #    pow = -1
 
             self.gcn[i]  = GCNAlign_GCNConv(in_channels, out_channels,improved,cached,self.bias,layer_index,pow = pow,**kwargs).to(device)
         for i in range(3,7):
-            #self.gcn[i] = GCNAlign_GCNConv_relation(out_channels, out_channels, improved, cached, bias, layer_index,**kwargs).to(device)
             self.gcn[i] = GCNAlign_GCNConv_relation1(out_channels, out_channels,bias=self.bias, heads = 1, **kwargs).to(device)
 
     def parameters(self, only_trainable=True):
@@ -707,7 +705,8 @@ class MyGCN(torch.nn.Module):
         zrs = torch.cat([r,zeros], dim=0)
         xr = torch.cat([x, r], dim=0)
         g1 = r_ij
-        r_ij = self.avg(zrs, g1.t(), 0, None, num_epoch=1)[num_rels:, :]
+        #r_ij = self.avg1(zrs, g1.t(), 0, None, num_epoch=1)[num_rels:, :]
+        r_ij = self.avg(zrs, g1.t(),num_epoch=1)[num_rels:, :]
         #r_ij = r_feature1[:-num_rels,:]
         #r_feature = self.avg(xr, g['rels'],1,None,num_epoch=1)[:num_nodes, :]
         e_feature = self.avg(x, g['default'], 2,None,num_epoch=1)
@@ -724,8 +723,14 @@ class MyGCN(torch.nn.Module):
         #so = [r_feature,r_star,e_star,e_feature]
         o = [e_star, e_feature]
         return o
-
-    def avg(self , x, g, i,edge_weight = None,num_epoch = 1 ):
+    def avg(self , x, g ,num_epoch = 1 ):
+        output = []
+        for epoch in range(num_epoch):
+            x = torch_scatter.scatter_mean(x[g[0, :], :], g[1, :], dim=0)
+            #x = torch.nn.functional.normalize(x, p=2)
+            output.append(x)
+        return  torch.cat(output,dim=-1)
+    def avg1(self , x, g, i,edge_weight = None,num_epoch = 1 ):
         output = []
         for epoch in range(num_epoch):
             x =   self.gcn[i+epoch](x, g,edge_weight)
@@ -804,12 +809,12 @@ class GCNAlign_GCNConv(MessagePassing):
         #edge_index, edge_weight, fill_value, num_nodes)
 
         row, col = edge_index
-        deg = scatter_add(edge_weight, row, dim=0, dim_size=num_nodes)
+        deg = scatter_add(edge_weight, col, dim=0, dim_size=num_nodes)
         deg_inv_sqrt = deg.pow(pow)
         deg_inv_sqrt[deg_inv_sqrt == float('inf')] = 0
 
         if(pow == -1):
-            return edge_index, deg_inv_sqrt[row] * edge_weight
+            return edge_index, deg_inv_sqrt[col] * edge_weight
         else:
             return edge_index, deg_inv_sqrt[row] * edge_weight * deg_inv_sqrt[col]
 
