@@ -29,6 +29,7 @@ from torch.nn import Linear, ReLU, Dropout
 from torch_geometric.nn import global_mean_pool
 
 from torch_scatter import scatter_add
+import torch_rbf
 # --- torch_geometric Packages end ---
 
 
@@ -180,13 +181,16 @@ class Encoder(torch.nn.Module):
             o = torch.cat(o,dim=-1)
             return o
         else:
+            o = []
             for l in range(self.num_layers):
                 x = F.dropout(x, p=self.feat_drop, training=self.training)
                 x_ = self.gnn_layers[l](x, edges, r)
                 x = x_
                 if l != self.num_layers - 1:
                     x = self.activation(x)
-            return x
+                o += [x]
+            o = torch.cat(o,dim=-1)
+            return o
 
     def parameters(self, only_trainable=True):
         l = []
@@ -701,15 +705,15 @@ class MyGCN(torch.nn.Module):
         num_nodes = x.shape[0]
         dim = x.shape[1]
         num_rels = r.shape[0]
-        zeros = torch.zeros([max(r_ij[:,1])-num_rels+1,dim]).to(self.device)
-        zrs = torch.cat([r,zeros], dim=0)
+        #zeros = torch.zeros([max(r_ij[:,1])-num_rels+1,dim]).to(self.device)
+        #zrs = torch.cat([r,zeros], dim=0)
         xr = torch.cat([x, r], dim=0)
         g1 = r_ij
-        r_ij = self.avg1(zrs, g1.t(), 0, None, num_epoch=1)[num_rels:, :]
-        #r_ij = self.avg(zrs, g1.t(),num_epoch=1)[num_rels:, :]
+        #r_ij = self.avg1(zrs, g1.t(), 0, None, num_epoch=1)[num_rels:, :]
+        r_ij = self.avg(r, g1.t(),num_epoch=1)[num_rels:, :]
         #e_feature = self.avg(x, g['default'], num_epoch=1)
         #r_feature = self.avg(xr, g['rels'],1,None,num_epoch=1)[:num_nodes, :]
-        e_feature = self.avg1(x, g['default'], 2,None,num_epoch=1)
+        e_feature = self.avg1(x, g['default'], 2,g['default_cnt'],num_epoch=1)
 
         #r_star = self.gcns( r_feature, g['default'], 3 ,r_ij, s,num_epoch = 2)
         e_star = self.gcns( e_feature, g['default'], 5 ,r_ij, s, None,num_epoch = 2)
@@ -781,8 +785,8 @@ class GCNAlign_GCNConv(MessagePassing):
         self.cached = cached
         self.pow = pow
         self.layer_index = layer_index
-        self.weight = nn.Parameter(torch.Tensor(1, self.out_channels ),requires_grad = False)
-
+        #self.weight = nn.Parameter(torch.Tensor(self.in_channels, 1))
+        self.weight = torch_rbf.RBF(self.in_channels,self.out_channels,torch_rbf.basis_func_dict()['gaussian'])
         if bias:
             self.bias = nn.Parameter(torch.Tensor(self.out_channels ))
         else:
@@ -791,11 +795,15 @@ class GCNAlign_GCNConv(MessagePassing):
         self.reset_parameters()
 
     def reset_parameters(self):
-        nn.init.ones_(self.weight)
+        self.weight.reset_parameters()
         if self.bias is not None:
             nn.init.zeros_(self.bias)
         self.cached_result = None
         self.cached_num_edges = None
+
+    @staticmethod
+    def get_mat(x):
+        return torch.matrix_exp(x-x.t())
 
     @staticmethod
     def norm(edge_index, num_nodes, edge_weight=None, improved=False,
@@ -804,9 +812,9 @@ class GCNAlign_GCNConv(MessagePassing):
             edge_weight = torch.ones((edge_index.size(1), ), dtype=dtype,
                                      device=edge_index.device)
 
-        #fill_value = 1.0 if not improved else 2.0
-        #edge_index, edge_weight = add_remaining_self_loops(
-        #edge_index, edge_weight, fill_value, num_nodes)
+        fill_value = 1.0 if not improved else 2.0
+        edge_index, edge_weight = add_remaining_self_loops(
+            edge_index, edge_weight, fill_value, num_nodes)
 
         row, col = edge_index
         deg = scatter_add(edge_weight, col, dim=0, dim_size=num_nodes)
@@ -820,7 +828,8 @@ class GCNAlign_GCNConv(MessagePassing):
 
     def forward(self, x, edge_index, edge_weight=None):
         """"""
-        #x = torch.mul(x, self.weight)
+        x = self.weight(x)
+        #x = torch.matmul(x, self.get_mat(self.weight))
 
         if self.cached and self.cached_result is not None:
             if edge_index.size(1) != self.cached_num_edges:
@@ -837,11 +846,15 @@ class GCNAlign_GCNConv(MessagePassing):
             self.cached_result = edge_index, norm
 
         edge_index, norm = self.cached_result
-        x= self.propagate(edge_index, x=x, norm=norm)
+        x = self.propagate(edge_index, x=x, norm=norm)
         return x
 
-    def message(self, x_j, norm):
-        return norm.view(-1, 1) * x_j
+    def message(self,x_i, x_j, norm):
+        #x_i1 = torch.nn.functional.normalize(x_i,p=2,dim=-1)
+        #x_j1 = torch.nn.functional.normalize(x_j, p=2, dim=-1)
+        #x_j1 = torch.matmul(x_j1, self.get_mat(self.weight))
+
+        return (norm.view(-1, 1) * (x_j))
 
     def update(self, aggr_out):
         if self.bias is not None:

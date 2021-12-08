@@ -533,7 +533,8 @@ class AlignmentData:
                 out_rels_dict[(r1,t)].append(h)
 
         if with_r:
-            edges = [[h, t] for (h, t) in edge_dict]
+            edges = [[h, t] for (h, t) in edge_dict  for r in edge_dict[(h, t)]]
+            edges1 = [[h, t] for (h, t) in edge_dict ]
             values = [1.0 / edge_dict[(h, t)].__len__() for (h, t) in edge_dict for r in edge_dict[(h, t)]]
             cnt = self.rel_num
             r_ij = []
@@ -550,7 +551,7 @@ class AlignmentData:
             edges = np.array(edges, dtype=np.int32)
             values = np.array(values, dtype=np.float32)
             r_ij = np.array(r_ij, dtype=np.float32)
-            edges_dict = {'default': edges, 'in_nodes': in_nodes, 'out_nodes': out_nodes, 'in_rels': in_rels,
+            edges_dict = {'default': edges, 'default1': edges1,'in_nodes': in_nodes, 'out_nodes': out_nodes, 'in_rels': in_rels,
                           'rels' : in_rels + out_rels,
                           'out_rels': out_rels, 'default_cnt':values}
             return edges_dict, values, r_ij

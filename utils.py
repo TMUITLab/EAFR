@@ -224,11 +224,15 @@ def random_sampling(pos, triples, ills, ids, k, params):
     elif len(pos[0]) == 2:  # ill: 1:2k
         neg_left, neg_right = [], []
         ills = set([(e1, e2) for (e1, e2) in ills])
-        left = [e[0] for e in ills]
-        right = [e[1] for e in ills]
-        neg_left = np.concatenate([np.random.randint(0,15000,[len(left)]),left],-1)
-        neg_right = np.concatenate([right,np.random.randint(0,15000,[len(right)])],-1)
-        return neg_left + neg_right
+        left = np.repeat(np.array([e[0] for e in ills]),k).reshape(-1,1)
+        right = np.repeat(np.array([e[1] for e in ills]),k).reshape(-1,1)
+        np.random.shuffle(left);
+        np.random.shuffle(right);
+        neg_left = np.concatenate([np.random.randint(0,max(ids[1]),[len(left),1]),left],-1)
+        neg_right = np.concatenate([right,np.random.randint(0,max(ids[1]),[len(left),1])],-1)
+        o = [(x[0],x[1]) for x in neg_left]
+        o += [(x[0], x[1]) for x in neg_right]
+        return o
         for _ in range(k):
             for (e1, e2) in pos:
                 e11 = random.sample(ids[0] - {e1}, 1)[0]

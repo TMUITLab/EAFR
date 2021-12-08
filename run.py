@@ -361,7 +361,7 @@ class Experiment:
                 pos = torch.LongTensor(pos_batch).to(device)
 
             dim = ins_emb.shape[1]
-
+            t1 = time.time()
             if encoder:
 
                 in_emb = ins_emb
@@ -390,13 +390,13 @@ class Experiment:
                     elif encoder.name == 'mygcn':
                         use_edges = {}
                         for edge_n in edges:
-                            if(edge_n.endswith('_cnt')):
+                            if (edge_n.endswith('_cnt')):
                                 use_edges[edge_n] = torch.FloatTensor(edges[edge_n]).to(device).t()
                             else:
                                 use_edges[edge_n] = torch.LongTensor(edges[edge_n]).to(device).t()
                         enh_emb = encoder.forward(use_edges, in_emb, rel_emb,
                                                   torch.sgn(torch.tensor(d.r_ij_idx)).to(device),
-                                                  torch.LongTensor(d.r_ij_idx).to(device))
+                                                  rel_emb[abs(d.r_ij_idx)].to(device))
                     else:
                         enh_emb = encoder.forward(use_edges, in_emb, rel_emb[
                             abs(d.r_ij_idx)] if encoder and encoder.name == "naea" or encoder.name.__contains__(
@@ -423,6 +423,8 @@ class Experiment:
             opt.step()
             losses.append(loss.item())
 
+            #print('this takes', time.time() - t1)
+
         return np.mean(losses)
 
 
@@ -440,7 +442,7 @@ if __name__ == '__main__':
     parser.add_argument("--seed", type=int, default=2020, help="random seed")
     parser.add_argument("--epoch", type=int, default=1000, help="number of epochs to train")
     parser.add_argument("--check", type=int, default=5, help="check point")
-    parser.add_argument("--update", type=int, default=1, help="number of epoch for updating negtive samples")
+    parser.add_argument("--update", type=int, default=5, help="number of epoch for updating negtive samples")
     parser.add_argument("--train_batch_size", type=int, default=-1, help="train batch_size (-1 means all in)")
     parser.add_argument("--early", action="store_true", default=False,
                         help="whether to use early stop")  # Early stop when the Hits@1 score begins to drop on the validation sets, checked every 10 epochs.
@@ -451,19 +453,16 @@ if __name__ == '__main__':
     parser.add_argument("--start_bp", type=int, default=4, help="epoch of starting bootstrapping")
     parser.add_argument("--threshold", type=float, default=0.75, help="threshold of bootstrap alignment")
 
-    parser.add_argument("--encoder", type=str, default="mygcn", nargs="?", help="which encoder to use: . max = 1")
-    parser.add_argument("--edges_name", type=str, default="default", nargs="?",
-                        help="edges that listed as ... in the  dictionary")
-    parser.add_argument("--hiddens", type=str, default="100,100",
-                        help="hidden units in each hidden layer(including in_dim and out_dim), splitted with comma")
+    parser.add_argument("--encoder", type=str, default="gcn-align", nargs="?", help="which encoder to use: . max = 1")
+    parser.add_argument("--edges_name", type=str, default="default", nargs="?",help="edges that listed as ... in the  dictionary")
+    parser.add_argument("--hiddens", type=str, default="100,100,100",help="hidden units in each hidden layer(including in_dim and out_dim), splitted with comma")
     parser.add_argument("--heads", type=str, default="1,1", help="heads in each gat layer, splitted with comma")
     parser.add_argument("--attn_drop", type=float, default=0, help="dropout rate for gat layers")
 
     parser.add_argument("--decoder", type=str, default="Align", nargs="?", help="which decoder to use: . min = 1")
     parser.add_argument("--sampling", type=str, default="R", help="negtive sampling method for each decoder")
     parser.add_argument("--k", type=str, default="4", help="negtive sampling number for each decoder")
-    parser.add_argument("--margin", type=str, default="3",
-                        help="margin for each margin based ranking loss (or params for other loss function)")
+    parser.add_argument("--margin", type=str, default="1",help="margin for each margin based ranking loss (or params for other loss function)")
     parser.add_argument("--alpha", type=str, default="1", help="weight for each margin based ranking loss")
     parser.add_argument("--beta", type=str, default="0.1", help="weight for each margin based ranking loss")
     parser.add_argument("--feat_drop", type=float, default=0, help="dropout rate for layers")
@@ -472,10 +471,8 @@ if __name__ == '__main__':
     parser.add_argument("--wd", type=float, default=0, help="weight decay (L2 loss on parameters)")
     parser.add_argument("--dr", type=float, default=0, help="decay rate of lr")
 
-    parser.add_argument("--train_dist", type=str, default="manhattan",
-                        help="distance function used in train (inner, cosine, euclidean, manhattan)")
-    parser.add_argument("--test_dist", type=str, default="euclidean",
-                        help="distance function used in test (inner, cosine, euclidean, manhattan)")
+    parser.add_argument("--train_dist", type=str, default="euclidean",help="distance function used in train (inner, cosine, euclidean, manhattan)")
+    parser.add_argument("--test_dist", type=str, default="euclidean",help="distance function used in test (inner, cosine, euclidean, manhattan)")
 
     parser.add_argument("--csls", type=int, default=10, help="whether to use csls in test (0 means not using)")
     parser.add_argument("--rerank", action="store_true", default=False, help="whether to use rerank in test")
